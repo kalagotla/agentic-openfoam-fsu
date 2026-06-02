@@ -1,0 +1,4 @@
+# Downloaded source documents (PDFs, archived HTML, OpenFOAM source copies).
+# These can be large and some are copyrighted, so they are not tracked.
+# Regenerate them any time with:  uv run python corpus/references/fetch.py
+cache/

@@ -1,0 +1,46 @@
+# Skip these when COPYing the repo into the build context — keeps
+# the image small and avoids leaking caches / venvs from the host.
+
+# Python / uv caches
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+.uv-cache/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Git history (not needed in the image; keeps it small)
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# OpenFOAM run artifacts — should be regenerated inside the container
+cases/work/
+cases/**/baseline/[1-9]*/
+cases/**/baseline/log.*
+cases/**/baseline/postProcessing/
+cases/**/baseline/constant/polyMesh/
+cases/examples/custom-bc-example/test-case/[1-9]*/
+cases/examples/custom-bc-example/test-case/log.*
+cases/examples/custom-bc-example/test-case/constant/polyMesh/
+cases/**/lib/Make/linux*/
+cases/**/lib/lnInclude/
+
+# Media / large
+*.mp4
+*.mov
+
+# Local-only docs
+docs/build-plan.md
+docs/runsheet.md
+docs/slide-outline.md
+
+# Misc
+.DS_Store
+Thumbs.db

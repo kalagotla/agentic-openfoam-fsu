@@ -1,0 +1,19 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| agentic-openfoam — custom-bc-example                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "constant";
+    object      transportProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Re_h = U_avg * h / nu = 1.0 * 0.05 / 0.005 = 10 (deeply laminar).
+transportModel  Newtonian;
+
+nu              0.005;
+
+// ************************************************************************* //

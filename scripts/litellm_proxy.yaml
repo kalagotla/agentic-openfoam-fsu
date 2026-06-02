@@ -1,0 +1,54 @@
+# LiteLLM proxy config — exposes an Anthropic-compatible /v1/messages
+# endpoint backed by a local Ollama model. Lets Claude Code (and any
+# other Anthropic API client) drive a local LLM end-to-end.
+#
+# Run:
+#   ollama serve &                                    # if not running
+#   ollama pull gpt-oss:20b                           # or another tools-capable model
+#   uv tool install 'litellm[proxy]'                  # one-time
+#   litellm --config scripts/litellm_proxy.yaml --port 4000
+#
+# Then point Claude Code at it:
+#   export ANTHROPIC_BASE_URL=http://localhost:4000
+#   export ANTHROPIC_API_KEY=sk-anything   # required, value ignored
+#   claude
+#
+# The model_name keys below are the Anthropic model IDs Claude Code
+# emits; they all alias to the same local backend so any /model pick
+# in Claude Code still works.
+
+model_list:
+  - model_name: claude-opus-4-7
+    litellm_params:
+      model: ollama_chat/gpt-oss:20b
+      api_base: http://localhost:11434
+  - model_name: claude-opus-4-5
+    litellm_params:
+      model: ollama_chat/gpt-oss:20b
+      api_base: http://localhost:11434
+  - model_name: claude-sonnet-4-6
+    litellm_params:
+      model: ollama_chat/gpt-oss:20b
+      api_base: http://localhost:11434
+  - model_name: claude-sonnet-4-5
+    litellm_params:
+      model: ollama_chat/gpt-oss:20b
+      api_base: http://localhost:11434
+  - model_name: claude-haiku-4-5
+    litellm_params:
+      model: ollama_chat/gpt-oss:20b
+      api_base: http://localhost:11434
+  - model_name: claude-3-5-sonnet-latest
+    litellm_params:
+      model: ollama_chat/gpt-oss:20b
+      api_base: http://localhost:11434
+  # Direct passthrough — use this model_name to skip the alias and pick
+  # the Ollama model explicitly from an Anthropic-format client.
+  - model_name: local
+    litellm_params:
+      model: ollama_chat/gpt-oss:20b
+      api_base: http://localhost:11434
+
+litellm_settings:
+  drop_params: True       # silently drop any Anthropic-only fields the Ollama backend rejects
+  set_verbose: False

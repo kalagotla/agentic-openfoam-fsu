@@ -1,0 +1,111 @@
+# Scenario: subsonic turbulent flow over a flat plate.
+#
+# Input the agent reads to author a CFD case from scratch. Describes the
+# physics; the agent decides the OpenFOAM specifics (solver, schemes,
+# mesh strategy, BC syntax) by consulting $FOAM_TUTORIALS via
+# list_tutorials / read_tutorial_file — and the web when uncertain.
+#
+# Output: a fresh, runnable case at cases/work/flat-plate/. Do NOT copy
+# from cases/examples/<name>/baseline/ — baselines are validation
+# references, not templates.
+#
+# Sections follow the standard scenario order (see cases/scenarios/README.md).
+
+name: flat-plate
+description: >
+  Zero-pressure-gradient turbulent flat plate at Re_x ≈ 5e6 — the
+  canonical NASA Turbulence Modeling Resource verification case. The agent
+  should author this from scratch; reach for tutorials matching
+  "incompressible, steady, RANS, external boundary layer".
+
+# Level 2 (Review): the agent pauses after each phase for researcher
+# confirmation. Lower to 1 to also pause before each phase, raise to 4-5 to
+# run unattended.
+automation_level: 2
+
+physics:
+  regime: incompressible
+  steady: true
+  turbulence:
+    model: kOmegaSST
+    inlet_intensity: 0.001     # 0.1% — TMR convention
+    inlet_viscosity_ratio: 0.009
+
+geometry:
+  shape: 2d-rectangle
+  # Plate sits along y = 0 from x = 0 to x = L. The leading edge of the
+  # plate is at x = 0; flow develops along the plate to x = L.
+  plate_length: 2.0            # m
+  domain:
+    x_min: -0.3                # short upstream region for inlet stand-off
+    x_max: 2.0
+    y_min: 0.0
+    y_max: 1.0                 # freestream height; ~0.5 plate-lengths is plenty
+
+mesh:
+  strategy: blockMesh
+  # Wall-resolved boundary layer: y+ ≈ 1 at the plate. The agent should use
+  # grading to cluster cells near y = 0 and near the leading edge.
+  target_y_plus: 1.0
+  cells_streamwise: 200
+  cells_wall_normal: 80
+  expansion_ratios:
+    wall_normal: 200             # tight near the plate, loose at the top
+    streamwise_leading_edge: 10  # cluster near x = 0
+
+fluid:
+  name: air
+  kinematic_viscosity: 1.5e-5  # m^2/s
+
+flow_conditions:
+  velocity: [37.5, 0.0, 0.0]   # m/s — gives Re_x = 5e6 at x = 2 m
+  pressure: 0.0                # gauge
+
+boundary_conditions:
+  # Names the agent should use as patch names in blockMeshDict.
+  inlet:
+    patches: [inlet]
+    type: velocity-inlet
+    velocity: flow_conditions
+  outlet:
+    patches: [outlet]
+    type: pressure-outlet
+    pressure: 0.0
+  plate:
+    patches: [plate]
+    type: no-slip-wall
+    wall_function: kOmegaSSTWallFunctions
+  symmetry_upstream:
+    # The bit of the bottom boundary upstream of the leading edge: slip / symmetry,
+    # not no-slip.
+    patches: [symmetry]
+    type: symmetry
+  freestream_top:
+    patches: [top]
+    type: freestream             # or far-field; agent picks the OpenFOAM analogue
+  front_back:
+    patches: [frontAndBack]
+    type: empty                  # 2D case
+
+controls:
+  end_time: 5000                 # iterations for steady simpleFoam
+  write_interval: 1000
+
+validation:
+  # No flat-plate reference ships with the repo; the agent sanity-checks
+  # qualitatively against textbook correlations. NASA TMR digitized data
+  # (https://tmbwg.github.io/turbmodels/flatplate.html) is the canonical
+  # quantitative reference if the agent fetches it during the run.
+  reference: nasa-tmr-flat-plate
+  qualitative_checks:
+    - "log-law profile at x = 1.0 m"
+    - "C_f within 10% of Schlichting correlation at Re_x = 1e6"
+    - "residuals drop ≥ 3 orders of magnitude"
+
+# Post-run promotions. Both default to NO — they modify tracked content
+# (the cases/examples/ baselines and the corpus) that the researcher may want
+# to review by hand first. Flip to true here if you want the agent to do them
+# automatically at end-of-run.
+end_of_run:
+  archive_case: false        # if true, openfoam.archive_case(case, scenario_name) → cases/examples/<name>/baseline/
+  draft_corpus: false        # if true, consultant.draft_annotation_from_report(case, tutorial_path) → corpus/<...>.draft.md

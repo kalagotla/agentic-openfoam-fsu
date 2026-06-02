@@ -1,0 +1,18 @@
+# Input style: PROMPT — just the ask, no setup details. The agent chooses the
+# operating point (Reynolds number), geometry size, mesh, solver, boundary
+# conditions, and the validation reference, and records every one of those
+# decisions with its rationale. This produces the RICHEST audit trail of the
+# three variants, because the agent owns and must justify every choice.
+#
+# automation_level is omitted, so it defaults to 2 (Review): the agent pauses
+# after each phase, which lets you confirm its key assumptions — most
+# importantly which Reynolds number and which published benchmark it picked —
+# before the run commits to them.
+#
+# One of three same-case variants demonstrating the input-detail spectrum;
+# see lid-cavity-expert.yaml and lid-cavity-guided.yaml.
+
+name: lid-cavity-prompt
+description: >
+  Set up, run, and validate a 2-D lid-driven cavity against the standard
+  published benchmark.

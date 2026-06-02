@@ -1,0 +1,9 @@
+#!/bin/sh
+# Allclean — strip mesh, time directories, logs, and postProcessing output.
+#
+# Requires OpenFOAM-v2412 to be sourced first.
+
+cd "${0%/*}" || exit 1
+. "${WM_PROJECT_DIR:?WM_PROJECT_DIR not set — source OpenFOAM first}"/bin/tools/CleanFunctions
+
+cleanCase

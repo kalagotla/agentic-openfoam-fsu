@@ -1,0 +1,28 @@
+#!/bin/sh
+# Allrun for the parabolicInletVelocity workshop example.
+#
+# Assumes:
+#   - OpenFOAM v2412 is sourced (`of2412` or `source .../etc/bashrc`)
+#   - The library was built via `cd ../lib && wmake libso`
+#     (or run ../build-lib.sh from this directory)
+
+set -e
+
+cd "$(dirname "$0")"
+
+# Build the user library if it hasn't been built yet.
+LIB="$FOAM_USER_LIBBIN/libparabolicInletVelocity.so"
+if [ ! -f "$LIB" ]; then
+    echo "[Allrun] libparabolicInletVelocity.so not found at $LIB."
+    echo "[Allrun] Building it now from ../lib/"
+    (cd ../lib && wmake libso)
+fi
+
+blockMesh > log.blockMesh 2>&1
+checkMesh > log.checkMesh 2>&1
+simpleFoam > log.simpleFoam 2>&1
+
+echo "[Allrun] done. Final iteration:"
+grep -E "Time = " log.simpleFoam | tail -2
+echo "[Allrun] Final residuals (Ux, p):"
+grep -E "Solving for Ux|Solving for p" log.simpleFoam | tail -4

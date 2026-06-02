@@ -1,0 +1,70 @@
+[project]
+name = "agentic-openfoam"
+version = "0.1.0"
+description = "Workshop materials for 'Accelerating CFD Simulations with Agentic AI and OpenFOAM', AIAA Aviation 2026"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "Dilip Kalagotla", email = "dilip.kalagotla@gmail.com" },
+]
+
+# Runtime deps live here for the bring-your-own-agent harness at
+# scripts/run_agent.py — the MCP servers themselves have their own deps
+# under servers/*/pyproject.toml.
+dependencies = [
+    "mcp>=1.0",          # MCP Python SDK — client side (stdio sessions)
+    "anthropic>=0.40",   # Anthropic backend (Claude API)
+    "openai>=1.50",      # Ollama backend (OpenAI-compatible API)
+]
+
+[tool.uv.workspace]
+members = [
+    "servers/openfoam",
+    "servers/validation",
+    "servers/consultant",
+    "servers/research_assistant",
+]
+
+[tool.uv.sources]
+openfoam-mcp = { workspace = true }
+validation-mcp = { workspace = true }
+consultant-mcp = { workspace = true }
+research-assistant-mcp = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.6",
+    "mypy>=1.11",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
+
+# RUF001/RUF002/RUF003 flag ambiguous Unicode characters. We keep en-dashes
+# in CFD threshold bands ("60–70 deg") and the × sign in mesh dimensions
+# ("80×80") because they render cleanly in docstrings and tool outputs.
+[tool.ruff.lint.per-file-ignores]
+"servers/consultant/src/consultant_mcp/assessments.py" = ["RUF001", "RUF002", "RUF003"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+# importlib import mode lets pytest collect each server's tests under a
+# common conftest without colliding on shared module names.
+addopts = "-ra -q --import-mode=importlib"
+testpaths = [
+    "servers/openfoam/tests",
+    "servers/validation/tests",
+    "servers/consultant/tests",
+    "servers/research_assistant/tests",
+]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true

@@ -1,0 +1,47 @@
+{
+  "quantity": "m6_wing_qualitative_targets",
+  "description": "Qualitative validation targets for a swept-tapered wing with ONERA M6 planform. The numerical values here are RANGES typical of a well-posed RANS simulation at the listed conditions on a 500k-1M cell mesh — NOT AGARD AR-138 experimental data points. Quantitative AGARD comparison requires (a) the real ONERA section (this case uses NACA 0010 as a workshop-friendly proxy) and (b) digitized AGARD Cp ordinates at the six standard wing stations. Pointers to obtain both are in cases/examples/onera-m6/reference/README.md.",
+  "convention": {
+    "geometry": "ONERA M6 planform: root chord = 1, tip chord = 0.5626, semi-span = 1.4846, LE sweep = 30 deg. Section: NACA 0010 (workshop proxy, not the real M6 section).",
+    "coefficients": "Cl, Cd are 3-D wing coefficients (full-span lift / drag normalized by 0.5 * rho * U_inf^2 * S_ref). S_ref is the wing planform area (the half-wing's area, doubled if a symmetry plane is used).",
+    "cp": "Pressure coefficient (p - p_inf) / (0.5 * rho * U_inf^2)."
+  },
+  "conditions": {
+    "subsonic_case": {
+      "mach": 0.3,
+      "reynolds_root_chord": 1.0e6,
+      "alpha_deg": 5.0,
+      "notes": "Subsonic, kOmegaSST, incompressible (simpleFoam). ~500k cells, ~30 min on 4 cores. The real ONERA M6 transonic case (M=0.84, alpha=3.06 deg) requires a compressible solver and finer near-shock refinement; included as an advanced variant — see scenarios/onera-m6.yaml."
+    }
+  },
+  "qualitative_targets": [
+    {
+      "metric": "lift_coefficient_Cl",
+      "expected_range": [0.25, 0.45],
+      "rationale": "A swept-tapered wing of this aspect ratio at alpha = 5 deg subsonic should produce a Cl in this band. Within-range is necessary but not sufficient; pair with the Cp suction-peak check below."
+    },
+    {
+      "metric": "drag_coefficient_Cd",
+      "expected_range": [0.010, 0.030],
+      "rationale": "Total Cd including induced drag from finite span. Workshop-mesh resolution will vary results; the range is intentionally wide."
+    },
+    {
+      "metric": "residual_orders_of_magnitude_dropped",
+      "expected_range": [3.0, 6.0],
+      "rationale": "Standard convergence gate."
+    },
+    {
+      "metric": "cp_suction_peak_location_x_over_c",
+      "expected_range": [0.01, 0.15],
+      "rationale": "On a subsonic conventional symmetric airfoil at moderate alpha, the upper-surface suction peak sits very near the leading edge."
+    },
+    {
+      "metric": "cp_suction_peak_magnitude_at_midspan",
+      "expected_range": [-2.5, -0.8],
+      "rationale": "Loose range covering both the subsonic case (~ -1.5) and the transonic case (~ -2.0 just ahead of the shock). Inspect the magnitude qualitatively against expected boundary-layer behavior."
+    }
+  ],
+  "primary_citation": "Schmitt, V. & Charpin, F. (1979). Pressure Distributions on the ONERA-M6-Wing at Transonic Mach Numbers. AGARD AR-138, Experimental Data Base for Computer Program Assessment.",
+  "data_provenance": "Hand-authored qualitative ranges based on RANS-CFD experience for this planform. NOT digitized experimental data. To compare quantitatively against AGARD AR-138 Cp ordinates at the six standard wing stations (y/b = 0.20, 0.44, 0.65, 0.80, 0.90, 0.95), download the AGARD report or use the NASA Turbulence Modeling Resource compilation at https://tmbwg.github.io/turbmodels/onerawingnumerics_val.html — and replace the NACA 0010 section in cases/examples/onera-m6/geometry/generate_m6_wing.py with the real ONERA M6 ordinates from the same source.",
+  "units": "All non-dimensional."
+}

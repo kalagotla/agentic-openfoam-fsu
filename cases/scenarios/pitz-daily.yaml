@@ -1,0 +1,127 @@
+# Scenario: backward-facing step matching the Armaly 1983 experimental rig.
+#
+# An example scenario (Demo 1 is now the lid-cavity / Ghia case; see
+# cases/scenarios/lid-cavity.yaml). The agent should author this from
+# scratch (browse $FOAM_TUTORIALS/incompressible/simpleFoam/pitzDaily for
+# structural patterns), generate the case in cases/work/pitz-daily/,
+# run, and validate the reattachment length against the digitized
+# Armaly 1983 reference data in cases/examples/pitz-daily/reference/.
+#
+# Sections follow the standard scenario order (see cases/scenarios/README.md).
+
+name: pitz-daily
+description: >
+  Backward-facing step in the pitzDaily geometry. Run the case as
+  specified and validate the simulated reattachment length against the
+  Armaly 1983 reference.
+
+# Level 2 (Review): the agent pauses after each phase for researcher
+# confirmation.
+automation_level: 2
+
+physics:
+  regime: incompressible
+  steady: true
+  flow_type: laminar          # Re~800 is laminar (Armaly: laminar for Re<1200)
+  # No turbulence model — laminar simpleFoam. NOTE: the pitzDaily *baseline*
+  # case (cases/examples/pitz-daily/baseline) deliberately runs turbulent
+  # kEpsilon at Re~50,800 and validates the ~6 step-height plateau; THIS
+  # scenario is the distinct laminar Re~800 exercise that extends the
+  # downstream domain and validates against Armaly's laminar x_r/h ~ 13.
+  reynolds_number_definition: >
+    Re_h = 2 * U_mean * h / nu  (Armaly hydraulic-diameter convention;
+    D_h = 2h for the inlet channel where the channel height equals the
+    step height). This matches the convention used in
+    cases/examples/pitz-daily/reference/reattachment_length.json. Do NOT use the
+    alternate U*h/nu definition.
+
+geometry:
+  shape: backward-facing-step
+  # Use the OpenFOAM pitzDaily tutorial geometry as the structural
+  # template. The agent should read the tutorial blockMeshDict to
+  # understand the patch layout.
+  template_tutorial: incompressible/simpleFoam/pitzDaily
+  #
+  # Step height and inlet-channel height are FIXED physical properties
+  # of the rig — they are NOT free parameters to be solved for in order
+  # to make Re match a target. If the inputs (U_mean, nu) give a Re that
+  # disagrees with a stated target, that is a setup error in the inputs,
+  # not in the geometry. Do not modify h.
+  step_height_m: 0.0254              # equals the pitzDaily tutorial value
+  inlet_channel_height_m: 0.0254     # = h (Armaly D_h = 2h convention)
+  # The downstream post-step section in the pitzDaily tutorial is short
+  # (~ 11 h) and contracts at ~ 8 h. For laminar BFS at Re ~ 800 the
+  # reattachment sits at x_r/h ~ 13, so the downstream section must be
+  # extended to at least ~ 20 h with no contraction. Adapting downstream
+  # length is allowed; adapting h is not.
+  post_step_length_min_h: 20
+
+mesh:
+  strategy: blockMesh
+  # The pitzDaily tutorial mesh is well-tested; the agent should use it
+  # as the structural template and adapt only if necessary for laminar
+  # convergence.
+  template: $FOAM_TUTORIALS/incompressible/simpleFoam/pitzDaily/system/blockMeshDict
+
+fluid:
+  kinematic_viscosity: 1.0e-05  # m^2/s
+
+boundary_conditions:
+  inlet:
+    patches: [inlet]
+    type: velocity-inlet
+    # Armaly's experiment uses a fully-developed channel flow at inlet;
+    # so should this simulation. For a 2-D channel of height h the
+    # parabolic profile is U(y) = 6 * U_mean * y * (h - y) / h^2.
+    profile: parabolic-fully-developed
+    mean_velocity: 0.157          # m/s, streamwise
+    flow_direction: [1.0, 0.0, 0.0]
+    # Laminar case — no turbulence inlet specs needed (no k/epsilon fields).
+    # If this scenario is ever switched to turbulent, restore inlet
+    # turbulence_intensity (~5%) and turbulence_length_scale (~h/10).
+  outlet:
+    patches: [outlet]
+    type: pressure-outlet
+    pressure: 0.0
+  walls:
+    patches: [upperWall, lowerWall]
+    type: no-slip-wall
+  front_back:
+    patches: [frontAndBack]
+    type: empty                   # 2D case
+
+controls:
+  end_time: 2000             # iterations for steady simpleFoam (laminar)
+  write_interval: 500
+
+validation:
+  reference: cases/examples/pitz-daily/reference/reattachment_length.json
+  quantitative_checks:
+    # The reattachment-length computation is BFS-specific (find the deepest
+    # negative wall shear, then the first zero-crossing downstream), so the
+    # agent's analysis script does it: sample wallShearStress on the lower
+    # wall via an OpenFOAM `sets` function object, read the .xy file, find
+    # the sign change, compute x_r/h. Compare to the armaly_re_800 row in the
+    # reference JSON.
+    - metric: reattachment_length_x_r_over_h
+      compare_to: armaly_re_800
+      tolerance_h: 1.5
+      # Tolerance widened from +/-1.0 to +/-1.5 step heights to account
+      # for the well-known offset between 2-D laminar simulation and
+      # Armaly's finite-aspect-ratio 3-D experiment (Erturk 2008, Comput.
+      # Fluids 37; Williams & Baker 1997). 2-D laminar BFS at Re=800
+      # consistently gives x_r/h ~ 11.5-12.5 vs Armaly's experimental
+      # 13.0. A correctly-set-up 2-D laminar case is expected to land
+      # near 12, so anything > 14.5 or < 11.5 represents a real setup
+      # discrepancy rather than the 2-D-vs-3-D physics offset.
+  qualitative_checks:
+    - "residuals drop >= 3 orders of magnitude"
+    - "recirculation bubble visible behind step in U field"
+
+# Post-run promotions. Both default to NO — they modify tracked content
+# (the cases/examples/ baselines and the corpus) that the researcher may want
+# to review by hand first. Flip to true here if you want the agent to do them
+# automatically at end-of-run.
+end_of_run:
+  archive_case: false        # if true, openfoam.archive_case(case, scenario_name) → cases/examples/<name>/baseline/
+  draft_corpus: false        # if true, consultant.draft_annotation_from_report(case, tutorial_path) → corpus/<...>.draft.md

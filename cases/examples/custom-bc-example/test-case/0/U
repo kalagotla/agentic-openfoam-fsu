@@ -1,0 +1,49 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| agentic-openfoam — custom-bc-example                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       volVectorField;
+    object      U;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+dimensions      [0 1 -1 0 0 0 0];
+
+internalField   uniform (0 0 0);
+
+boundaryField
+{
+    inlet
+    {
+        // Custom BC supplied by libparabolicInletVelocity.so.
+        // Channel half-height = 0.05 m; centred at y = 0.05.
+        // Umax = 1.5 -> mean U = 1.0 -> Re_h = 10.
+        type            parabolicInletVelocity;
+        Umax            1.5;
+        flowDir         (1 0 0);
+        transverseDir   (0 1 0);
+        centre          0.05;
+        halfHeight      0.05;
+        value           uniform (0 0 0);
+    }
+
+    outlet
+    {
+        type            zeroGradient;
+    }
+
+    walls
+    {
+        type            noSlip;
+    }
+
+    frontAndBack
+    {
+        type            empty;
+    }
+}
+
+// ************************************************************************* //

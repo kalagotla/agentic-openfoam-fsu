@@ -1,0 +1,56 @@
+# Input style: GUIDED — the user knows the physics and geometry but is unsure
+# about a couple of choices and defers them with `guidance:` (and by omitting
+# fields the agent can derive or default). The agent makes those calls and
+# records each one — decision, why, alternatives, when-it-breaks — in
+# REPORT.md, so the report carries more reasoning than the expert variant.
+#
+# One of three same-case variants demonstrating the input-detail spectrum;
+# see lid-cavity-expert.yaml and lid-cavity-prompt.yaml.
+
+name: lid-cavity-guided
+description: >
+  Lid-driven cavity at Re = 400 in a unit square — top wall moving in +x,
+  the other three walls no-slip. Validate the centerline velocity profiles
+  against Ghia, Ghia & Shin (1982).
+
+automation_level: 2
+
+physics:
+  regime: incompressible
+  steady: true
+  reynolds_number: 400
+  guidance: "Re = 400 — I believe it's laminar but I'm not certain. Choose
+             laminar vs a turbulence model and say why."
+
+geometry:
+  shape: 2d-square-cavity
+  side_length_m: 1.0
+  # nu is omitted on purpose — derive it from Re, U_lid = 1, and L = 1.
+
+mesh:
+  guidance: "Resolve it well enough to match the Ghia centerline profiles to
+             ~5%. You choose the resolution and any grading; refine if the
+             first validation misses."
+
+# solver omitted on purpose — pick the steady incompressible solver and
+# appropriate schemes/relaxation from the structural tutorial.
+
+boundary_conditions:
+  moving_lid:  { patches: [movingWall],   type: velocity, velocity: [1.0, 0.0, 0.0] }
+  fixed_walls: { patches: [fixedWalls],   type: no-slip-wall }
+  front_back:  { patches: [frontAndBack], type: empty }
+
+# controls omitted on purpose — pick a sensible iteration count + write
+# interval for a steady run.
+
+validation:
+  reference: cases/lid-cavity/reference/ghia_1982.json
+  analysis:
+    script: analysis/validate.py
+    checks:
+      - { quantity: u_centerline, reference_dataset: ghia_re_400_u_centerline, tolerance_relative_L2: 0.05 }
+      - { quantity: v_centerline, reference_dataset: ghia_re_400_v_centerline, tolerance_relative_L2: 0.05 }
+
+end_of_run:
+  archive_case: false
+  draft_corpus: false

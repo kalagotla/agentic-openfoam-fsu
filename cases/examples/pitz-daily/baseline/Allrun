@@ -1,0 +1,14 @@
+#!/bin/sh
+# Allrun — mesh and solve the Pitz-Daily baseline case end to end.
+#
+# Sampling (wall shear on lowerWall, U on three vertical lines) is wired into
+# system/controlDict as function objects, so it runs at every write step.
+# No separate postProcess pass is needed.
+#
+# Requires OpenFOAM-v2412 to be sourced first (e.g. `of2412`).
+
+cd "${0%/*}" || exit 1
+. "${WM_PROJECT_DIR:?WM_PROJECT_DIR not set — source OpenFOAM first}"/bin/tools/RunFunctions
+
+runApplication blockMesh
+runApplication "$(getApplication)"

@@ -1,0 +1,216 @@
+{
+  "description": "Offline literature repository for agentic-openfoam. One entry per cited source across the consultant server (CITATION_SOURCES) and the case reference data. `corpus/references/fetch.py` reads this file and downloads every source that has an open download into corpus/references/cache/ (gitignored) so a user can read the primary sources offline. Copyrighted books and paywalled papers cannot be redistributed; those carry download.method == 'manual' with a DOI/ISBN so the user can obtain them. Keep this manifest in sync with the consultant's CITATION_SOURCES (a test enforces it).",
+  "cache_dir": "corpus/references/cache",
+  "schema": {
+    "id": "stable key for the source",
+    "kind": "source_code | paper | book | report | webpage",
+    "citation": "full human-readable citation",
+    "doi_or_isbn": "DOI or ISBN where applicable (optional)",
+    "url": "canonical reference URL for a human (optional)",
+    "consultant_tag": "the CITATION_SOURCES key this backs, if any (optional)",
+    "used_by": "list of consumers (consultant tag / case path)",
+    "access": "open | open-mirror | manual (copyrighted/paywalled)",
+    "download": "{method: http, url} | {method: foam_src, src} | {method: manual, note}",
+    "file": "cache filename written by fetch.py (omit for manual)",
+    "verified": "date the citation/URL was last verified"
+  },
+  "sources": [
+    {
+      "id": "of_check_mesh_src",
+      "kind": "source_code",
+      "citation": "OpenFOAM v2412 checkMesh defaults: aspectThreshold_=1000, nonOrthThreshold_=70 deg, skewThreshold_=4, in primitiveMeshCheck.C.",
+      "url": "https://develop.openfoam.com/Development/openfoam/-/blob/master/src/OpenFOAM/meshes/primitiveMesh/primitiveMeshCheck/primitiveMeshCheck.C",
+      "consultant_tag": "of_check_mesh_src",
+      "used_by": ["consultant:of_check_mesh_src"],
+      "access": "open",
+      "download": {"method": "foam_src", "src": "OpenFOAM/meshes/primitiveMesh/primitiveMeshCheck/primitiveMeshCheck.C"},
+      "file": "of_check_mesh_src__primitiveMeshCheck.C",
+      "verified": "2026-05-28"
+    },
+    {
+      "id": "of_mesh_quality_dict",
+      "kind": "source_code",
+      "citation": "OpenFOAM v2412 default mesh-quality controls: maxNonOrtho=65, maxInternalSkewness=4, maxBoundarySkewness=20, maxConcave=80, in etc/caseDicts/meshQualityDict.",
+      "url": "https://develop.openfoam.com/Development/openfoam/-/blob/master/etc/caseDicts/meshQualityDict",
+      "consultant_tag": "of_mesh_quality_dict",
+      "used_by": ["consultant:of_mesh_quality_dict"],
+      "access": "open",
+      "download": {"method": "foam_src", "base": "WM_PROJECT_DIR", "src": "etc/caseDicts/meshQualityDict"},
+      "file": "of_mesh_quality_dict__meshQualityDict",
+      "verified": "2026-05-28"
+    },
+    {
+      "id": "of_user_guide_mesh",
+      "kind": "webpage",
+      "citation": "OpenFOAM v2412 User Guide, Ch. 4 'Mesh generation and conversion' (mesh-quality controls).",
+      "url": "https://www.openfoam.com/documentation/user-guide/4-mesh-generation-and-conversion",
+      "consultant_tag": "of_user_guide",
+      "used_by": ["consultant:of_user_guide"],
+      "access": "open",
+      "download": {"method": "http", "url": "https://www.openfoam.com/documentation/user-guide/4-mesh-generation-and-conversion"},
+      "file": "of_user_guide_mesh.html",
+      "verified": "2026-05-28"
+    },
+    {
+      "id": "of_user_guide_urf",
+      "kind": "webpage",
+      "citation": "OpenFOAM v2412 User Guide, 6.3 'Solution and algorithm control' (relaxationFactors, residualControl, linear-solver tolerances).",
+      "url": "https://www.openfoam.com/documentation/user-guide/6-solving/6.3-solution-and-algorithm-control",
+      "consultant_tag": "of_user_guide_urf",
+      "used_by": ["consultant:of_user_guide_urf"],
+      "access": "open",
+      "download": {"method": "http", "url": "https://www.openfoam.com/documentation/user-guide/6-solving/6.3-solution-and-algorithm-control"},
+      "file": "of_user_guide_urf.html",
+      "verified": "2026-05-28"
+    },
+    {
+      "id": "versteeg_2007",
+      "kind": "book",
+      "citation": "Versteeg, H.K. & Malalasekera, W. (2007). An Introduction to Computational Fluid Dynamics: The Finite Volume Method, 2nd ed. Pearson. Ch. 3 (turbulence & law of the wall), Ch. 5 (convection-diffusion schemes), Ch. 6 (SIMPLE & under-relaxation), Ch. 11 (complex geometries).",
+      "doi_or_isbn": "ISBN 9780131274983",
+      "consultant_tag": "versteeg",
+      "used_by": ["consultant:versteeg"],
+      "access": "manual",
+      "download": {"method": "manual", "note": "Copyrighted textbook; obtain via library or publisher. ISBN 9780131274983. Chapter mapping verified against the Pearson TOC and the Internet Archive copy (Ch.3 = 'Turbulence and its Modelling')."}
+    },
+    {
+      "id": "wilcox_2006",
+      "kind": "book",
+      "citation": "Wilcox, D.C. (2006). Turbulence Modeling for CFD, 3rd ed. DCW Industries. Law of the wall and near-wall y+ resolution.",
+      "doi_or_isbn": "ISBN 9781928729082",
+      "consultant_tag": "wilcox",
+      "used_by": ["consultant:wilcox"],
+      "access": "manual",
+      "download": {"method": "manual", "note": "Copyrighted textbook; obtain via library or publisher. ISBN 9781928729082."}
+    },
+    {
+      "id": "menter_sst_2003",
+      "kind": "paper",
+      "citation": "Menter, F.R., Kuntz, M. & Langtry, R. (2003). Ten Years of Industrial Experience with the SST Turbulence Model. Turbulence, Heat and Mass Transfer 4, pp. 625-632 (Begell House).",
+      "url": "https://www.scirp.org/reference/referencespapers?referenceid=2615419",
+      "consultant_tag": "menter_sst",
+      "used_by": ["consultant:menter_sst"],
+      "access": "open-mirror",
+      "download": {"method": "http", "url": "https://cfd.spb.ru/agarbaruk/doc/2003_Menter,%20Kuntz,%20Langtry_Ten%20years%20of%20industrial%20experience%20with%20the%20SST%20turbulence%20model.pdf"},
+      "file": "menter_sst_2003.pdf",
+      "verified": "2026-05-28"
+    },
+    {
+      "id": "nasa_tmr_flatplate_grids",
+      "kind": "webpage",
+      "citation": "NASA Turbulence Modeling Resource, flat-plate grids: wall-integration RANS (no wall functions) needs average min y+ < 1.",
+      "url": "https://tmbwg.github.io/turbmodels/flatplate_grids.html",
+      "consultant_tag": "nasa_tmr",
+      "used_by": ["consultant:nasa_tmr", "cases/scenarios/flat-plate"],
+      "access": "open",
+      "download": {"method": "http", "url": "https://tmbwg.github.io/turbmodels/flatplate_grids.html"},
+      "file": "nasa_tmr_flatplate_grids.html",
+      "verified": "2026-05-28"
+    },
+    {
+      "id": "ghia_1982",
+      "kind": "paper",
+      "citation": "Ghia, U., Ghia, K.N. & Shin, C.T. (1982). High-Re solutions for incompressible flow using the Navier-Stokes equations and a multigrid method. Journal of Computational Physics 48(3):387-411.",
+      "doi_or_isbn": "10.1016/0021-9991(82)90058-4",
+      "url": "https://doi.org/10.1016/0021-9991(82)90058-4",
+      "used_by": ["cases/lid-cavity"],
+      "access": "manual",
+      "download": {"method": "manual", "note": "Paywalled at JCP. The digitized Table I/II values used by this repo ship in cases/lid-cavity/reference/ghia_1982.json; they were verified against the transcriptions at gist.github.com/ivan-pi/3e9326d18a366ffe6a8e5bfda6353219 (Table I u) and gist.github.com/ivan-pi/caa6c6737d36a9140fbcf2ea59c78b3c (Table II v)."}
+    },
+    {
+      "id": "armaly_1983",
+      "kind": "paper",
+      "citation": "Armaly, B.F., Durst, F., Pereira, J.C.F. & Schoenung, B. (1983). Experimental and theoretical investigation of backward-facing step flow. Journal of Fluid Mechanics 127:473-496. (Reattachment vs Re: Figure 4.)",
+      "doi_or_isbn": "10.1017/S0022112083002839",
+      "url": "https://doi.org/10.1017/S0022112083002839",
+      "used_by": ["cases/examples/pitz-daily"],
+      "access": "open-mirror",
+      "download": {"method": "http", "url": "https://courses.washington.edu/me431/handouts/armaly-jfm-83.pdf"},
+      "file": "armaly_1983__jfm127.pdf",
+      "verified": "2026-05-28"
+    },
+    {
+      "id": "driver_seegmiller_1985",
+      "kind": "paper",
+      "citation": "Driver, D.M. & Seegmiller, H.L. (1985). Features of a Reattaching Turbulent Shear Layer in Divergent Channel Flow. AIAA Journal 23(2):163-171.",
+      "doi_or_isbn": "10.2514/3.8890",
+      "url": "https://doi.org/10.2514/3.8890",
+      "used_by": ["cases/examples/pitz-daily"],
+      "access": "manual",
+      "download": {"method": "manual", "note": "Paywalled at AIAA. Turbulent backward-facing-step benchmark; the NASA TMR backstep page (see nasa_tmr_backstep) hosts the digitized data and grids."}
+    },
+    {
+      "id": "le_moin_kim_1997",
+      "kind": "paper",
+      "citation": "Le, H., Moin, P. & Kim, J. (1997). Direct numerical simulation of turbulent flow over a backward-facing step. Journal of Fluid Mechanics 330:349-374. (DNS x_r/h = 6.28 at Re_h=5100.)",
+      "doi_or_isbn": "10.1017/S0022112096003941",
+      "url": "https://doi.org/10.1017/S0022112096003941",
+      "used_by": ["cases/examples/pitz-daily"],
+      "access": "manual",
+      "download": {"method": "manual", "note": "Paywalled at JFM."}
+    },
+    {
+      "id": "nasa_tmr_backstep",
+      "kind": "webpage",
+      "citation": "NASA Turbulence Modeling Resource, 2D backward-facing step verification/validation (Driver-Seegmiller).",
+      "url": "https://tmbwg.github.io/turbmodels/backstep_val.html",
+      "used_by": ["cases/examples/pitz-daily"],
+      "access": "open",
+      "download": {"method": "http", "url": "https://tmbwg.github.io/turbmodels/backstep_val.html"},
+      "file": "nasa_tmr_backstep.html",
+      "verified": "2026-05-28"
+    },
+    {
+      "id": "drela_xfoil_1989",
+      "kind": "paper",
+      "citation": "Drela, M. (1989). XFOIL: An Analysis and Design System for Low Reynolds Number Airfoils. In Lecture Notes in Engineering 54, Springer.",
+      "doi_or_isbn": "10.1007/978-3-642-84010-4_1",
+      "url": "https://doi.org/10.1007/978-3-642-84010-4_1",
+      "used_by": ["cases/examples/naca-0012"],
+      "access": "manual",
+      "download": {"method": "manual", "note": "Book chapter (Springer LNE 54). The XFOIL program and docs are open: see xfoil_site."}
+    },
+    {
+      "id": "xfoil_site",
+      "kind": "webpage",
+      "citation": "XFOIL home page (M. Drela / H. Youngren, MIT) - source, docs, and download.",
+      "url": "https://web.mit.edu/drela/Public/web/xfoil/",
+      "used_by": ["cases/examples/naca-0012"],
+      "access": "open",
+      "download": {"method": "http", "url": "https://web.mit.edu/drela/Public/web/xfoil/"},
+      "file": "xfoil_site.html",
+      "verified": "2026-05-28"
+    },
+    {
+      "id": "ladson_1988",
+      "kind": "report",
+      "citation": "Ladson, C.L. (1988). Effects of Independent Variation of Mach and Reynolds Numbers on the Low-Speed Aerodynamic Characteristics of the NACA 0012 Airfoil Section. NASA TM-4074.",
+      "url": "https://ntrs.nasa.gov/citations/19880019495",
+      "used_by": ["cases/examples/naca-0012"],
+      "access": "open",
+      "download": {"method": "http", "url": "https://ntrs.nasa.gov/api/citations/19880019495/downloads/19880019495.pdf"},
+      "file": "ladson_1988__nasa_tm_4074.pdf",
+      "verified": "2026-05-28"
+    },
+    {
+      "id": "schmitt_charpin_1979",
+      "kind": "report",
+      "citation": "Schmitt, V. & Charpin, F. (1979). Pressure Distributions on the ONERA-M6-Wing at Transonic Mach Numbers. AGARD AR-138.",
+      "url": "https://tmbwg.github.io/turbmodels/onerawingnumerics_val.html",
+      "used_by": ["cases/examples/onera-m6"],
+      "access": "manual",
+      "download": {"method": "manual", "note": "AGARD AR-138 report (FDP Working Group 04, 1979). Cp ordinates and geometry are mirrored on the NASA TMR ONERA M6 page (see nasa_tmr_onera)."}
+    },
+    {
+      "id": "nasa_tmr_onera",
+      "kind": "webpage",
+      "citation": "NASA Turbulence Modeling Resource, 3D ONERA M6 wing validation (AGARD AR-138 Cp data, IGES/STP geometry).",
+      "url": "https://tmbwg.github.io/turbmodels/onerawingnumerics_val.html",
+      "used_by": ["cases/examples/onera-m6"],
+      "access": "open",
+      "download": {"method": "http", "url": "https://tmbwg.github.io/turbmodels/onerawingnumerics_val.html"},
+      "file": "nasa_tmr_onera.html",
+      "verified": "2026-05-28"
+    }
+  ]
+}

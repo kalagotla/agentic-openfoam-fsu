@@ -1,0 +1,87 @@
+# Scenario: 2-D lid-driven cavity at Re = 1000 (Ghia 1982 reference).
+#
+# This is Demo 2 — the corpus-reuse demo. It is the SAME tutorial template as
+# Demo 1 (lid-cavity.yaml, Re=400), one Reynolds number higher. By the time
+# this runs, Demo 1 has produced — and the presenter has reviewed and promoted
+# — a corpus entry at corpus/incompressible/icoFoam/cavity/cavity.md. When the
+# agent picks this tutorial as its template it calls
+# consultant.get_tutorial_annotation on that path and inherits the learned
+# approach: swap transient icoFoam for steady simpleFoam, set a pressure
+# reference cell for the closed domain, tighten residualControl before a grid
+# study, and reach Ghia-quality profiles with a well-resolved grid rather than
+# the tutorial's coarse 20x20. So this run should skip the coarse-mesh failure
+# that Demo 1 had to discover, and converge in fewer iterations.
+#
+# Re=1000 is still steady and laminar, well within the regime where a steady
+# solver is valid. The 2-D cavity does become time-periodic at high enough Re;
+# the operational test is not a memorized critical Re but the solve itself — if
+# residuals plateau into a limit cycle, the steady template no longer applies.
+#
+# Sections follow the standard scenario order (see cases/scenarios/README.md).
+
+name: lid-cavity-re1000
+description: >
+  Two-dimensional lid-driven cavity flow at Re = 1000 — one step up from
+  Demo 1's Re=400, same geometry and benchmark family (Ghia, Ghia & Shin
+  1982). Validate the centerline u(y) and v(x) profiles against the Re=1000
+  reference columns.
+
+automation_level: 2
+
+physics:
+  regime: incompressible
+  steady: true
+  flow_type: laminar              # steady-laminar; a steady solver applies as
+                                  # long as the solve converges rather than
+                                  # stalling into a limit cycle
+  reynolds_number_definition: "Re = U_lid * L / nu = 1000"
+
+geometry:
+  shape: 2d-square-cavity
+  side_length_m: 1.0
+  template_tutorial: incompressible/icoFoam/cavity
+
+mesh:
+  strategy: blockMesh
+  dimension: 2d
+  # Resolution is not preset. The corpus entry from the Re=400 run records the
+  # grid that reached the Ghia band there; Re=1000 sharpens the wall jets and
+  # corner vortices, so expect to need at least as fine a grid (and possibly
+  # wall grading). Establish the final count by grid convergence toward Ghia.
+
+fluid:
+  kinematic_viscosity: 0.001      # nu = U_lid * L / Re = 1 * 1 / 1000
+
+boundary_conditions:
+  moving_lid:  { patches: [movingWall],   type: velocity, velocity: [1.0, 0.0, 0.0] }
+  fixed_walls: { patches: [fixedWalls],   type: no-slip-wall }
+  front_back:  { patches: [frontAndBack], type: empty }
+
+solver:
+  application: simpleFoam         # steady incompressible (swapped from icoFoam)
+  # Closed domain — needs a pressure reference cell (pRefCell/pRefValue), the
+  # icoFoam->simpleFoam gotcha the corpus entry records.
+
+controls:
+  end_time: 5000
+  write_interval: 1000
+
+validation:
+  reference: cases/lid-cavity/reference/ghia_1982.json
+  analysis:
+    script: analysis/validate.py
+    checks:
+      - quantity: u_centerline               # u(y) sampled at x = 0.5
+        reference_dataset: ghia_re_1000_u_centerline
+        tolerance_relative_L2: 0.05
+      - quantity: v_centerline               # v(x) sampled at y = 0.5
+        reference_dataset: ghia_re_1000_v_centerline
+        tolerance_relative_L2: 0.05
+  qualitative_checks:
+    - "residuals drop >= 4 orders of magnitude"
+    - "primary vortex sits nearer the geometric centre than at Re=400 (~x 0.53, y 0.56)"
+    - "stronger, more compact lower-corner vortices than Re=400"
+
+end_of_run:
+  archive_case: false
+  draft_corpus: false

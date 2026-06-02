@@ -1,0 +1,22 @@
+[project]
+name = "validation-mcp"
+version = "0.1.0"
+description = "MCP server for comparing OpenFOAM simulations against reference data"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastmcp>=3.0",
+    "numpy>=2.0",
+    "pydantic>=2.0",
+    "matplotlib>=3.8",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/validation_mcp"]
+
+[project.scripts]
+validation-mcp = "validation_mcp.__main__:main"

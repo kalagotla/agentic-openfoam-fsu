@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__openfoam__list_tutorials",
+      "mcp__openfoam__read_tutorial_file",
+      "mcp__openfoam__write_dict",
+      "mcp__openfoam__run_blockmesh",
+      "mcp__openfoam__run_solver",
+      "mcp__openfoam__get_residuals",
+      "Bash(python3 *)"
+    ]
+  },
+  "enabledMcpjsonServers": [
+    "openfoam",
+    "validation",
+    "consultant",
+    "research_assistant"
+  ],
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "mcp__openfoam__(run_blockmesh|run_snappy_hex_mesh|check_mesh|run_solver|decompose_par|reconstruct_par|record_step)|mcp__validation__run_analysis",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/automation_gate_hook.py\""
+          }
+        ]
+      }
+    ]
+  }
+}

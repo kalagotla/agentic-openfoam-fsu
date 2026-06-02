@@ -1,0 +1,124 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  v2412                                 |
+|   \\  /    A nd           | Website:  www.openfoam.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      controlDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+application     simpleFoam;
+
+startFrom       startTime;
+
+startTime       0;
+
+stopAt          endTime;
+
+endTime         2000;
+
+deltaT          1;
+
+writeControl    timeStep;
+
+writeInterval   100;
+
+purgeWrite      0;
+
+writeFormat     ascii;
+
+writePrecision  6;
+
+writeCompression off;
+
+timeFormat      general;
+
+timePrecision   6;
+
+runTimeModifiable true;
+
+functions
+{
+    #includeFunc streamlines
+
+    // Wall shear stress on the lower wall — used by validation.py to find
+    // the reattachment point (sign change of tau_x along the BFS floor).
+    wallShearStress
+    {
+        type            wallShearStress;
+        libs            (fieldFunctionObjects);
+        patches         (lowerWall);
+        writeControl    writeTime;
+    }
+
+    // Sample wallShearStress along the lower wall as raw face data.
+    // Output: postProcessing/bottomWallShear/<time>/wallShearStress_lowerWall.raw
+    bottomWallShear
+    {
+        type            surfaces;
+        libs            (sampling);
+        surfaceFormat   raw;
+        fields          (wallShearStress);
+        interpolationScheme cell;
+        surfaces
+        {
+            lowerWall
+            {
+                type        patch;
+                patches     (lowerWall);
+                interpolate false;
+            }
+        }
+        writeControl    writeTime;
+    }
+
+    // Sample U on three vertical lines at x/h = 4, 6, 10 (h = 25.4 mm,
+    // so x = 0.1016, 0.1524, 0.254 m). Lines span -h..+h; samples falling
+    // outside the mesh are dropped automatically.
+    profiles
+    {
+        type                sets;
+        libs                (sampling);
+        setFormat           raw;
+        fields              (U);
+        interpolationScheme cellPoint;
+        sets
+        {
+            line_x4
+            {
+                type    uniform;
+                axis    y;
+                start   (0.1016 -0.0254 0);
+                end     (0.1016  0.0254 0);
+                nPoints 200;
+            }
+            line_x6
+            {
+                type    uniform;
+                axis    y;
+                start   (0.1524 -0.0254 0);
+                end     (0.1524  0.0254 0);
+                nPoints 200;
+            }
+            line_x10
+            {
+                type    uniform;
+                axis    y;
+                start   (0.254 -0.0254 0);
+                end     (0.254  0.0254 0);
+                nPoints 200;
+            }
+        }
+        writeControl    writeTime;
+    }
+}
+
+
+// ************************************************************************* //

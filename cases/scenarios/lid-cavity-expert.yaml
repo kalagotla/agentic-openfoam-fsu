@@ -1,0 +1,70 @@
+# Input style: EXPERT — every choice is specified, down to mesh resolution,
+# discretisation schemes, and relaxation. The agent executes and validates the
+# user's spec; little is left to its judgement, so REPORT.md mostly confirms
+# and checks the provided setup rather than reasoning choices out.
+#
+# One of three same-case variants demonstrating the input-detail spectrum;
+# see lid-cavity-guided.yaml and lid-cavity-prompt.yaml.
+
+name: lid-cavity-expert
+description: >
+  2-D lid-driven cavity at Re = 400, validated against Ghia, Ghia & Shin
+  (1982) centerline profiles. Fully specified.
+
+automation_level: 2
+
+physics:
+  regime: incompressible
+  steady: true
+  flow_type: laminar
+  reynolds_number_definition: "Re = U_lid * L / nu = 400"
+
+geometry:
+  shape: 2d-square-cavity
+  side_length_m: 1.0
+  template_tutorial: incompressible/icoFoam/cavity
+
+mesh:
+  strategy: blockMesh
+  dimension: 2d
+  resolution: [128, 128, 1]
+  grading:
+    wall_normal_expansion: 4          # cluster cells toward all four walls
+  rationale: "128^2 graded resolves the wall layers and corner vortices for
+              Ghia-quality profiles at Re=400."
+
+fluid:
+  kinematic_viscosity: 0.0025         # nu = U_lid * L / Re = 1 * 1 / 400
+
+boundary_conditions:
+  moving_lid:  { patches: [movingWall],   type: velocity, velocity: [1.0, 0.0, 0.0] }
+  fixed_walls: { patches: [fixedWalls],   type: no-slip-wall }
+  front_back:  { patches: [frontAndBack], type: empty }
+
+solver:
+  application: simpleFoam
+  schemes:
+    div_U: "bounded Gauss linearUpwind grad(U)"   # 2nd-order, bounded
+    laplacian: "Gauss linear corrected"
+  relaxation: { U: 0.7, p: 0.3 }
+  convergence:
+    residual_control: { U: 1.0e-6, p: 1.0e-6 }
+
+controls:
+  end_time: 5000
+  write_interval: 1000
+
+validation:
+  reference: cases/lid-cavity/reference/ghia_1982.json
+  analysis:
+    script: analysis/validate.py
+    checks:
+      - { quantity: u_centerline, reference_dataset: ghia_re_400_u_centerline, tolerance_relative_L2: 0.05 }
+      - { quantity: v_centerline, reference_dataset: ghia_re_400_v_centerline, tolerance_relative_L2: 0.05 }
+  qualitative_checks:
+    - "residuals drop >= 4 orders of magnitude"
+    - "primary vortex near (x ~ 0.55, y ~ 0.60); two lower-corner vortices"
+
+end_of_run:
+  archive_case: false
+  draft_corpus: false

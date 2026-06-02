@@ -1,0 +1,35 @@
+{
+  "quantity": "reattachment_length",
+  "description": "x_r/h vs Re for the backward-facing step. Re follows Armaly's convention: Re = U_mean * D_h / nu, with D_h = 2*H_inlet (the hydraulic diameter of the 2D inlet channel). For a geometry where the inlet channel height equals the step height (Armaly 1983; OpenFOAM pitzDaily), Re = 2 * U * h / nu.",
+  "data": [
+    {"reynolds_number": 100,  "x_r_over_h": 3.0,   "regime": "laminar",      "source": "armaly1983_fig4"},
+    {"reynolds_number": 389,  "x_r_over_h": 8.7,   "regime": "laminar",      "source": "armaly1983_fig4 (often-cited point reproduced in erturk2008)"},
+    {"reynolds_number": 648,  "x_r_over_h": 12.0,  "regime": "laminar",      "source": "armaly1983_fig4"},
+    {"reynolds_number": 800,  "x_r_over_h": 13.0,  "regime": "laminar",      "source": "armaly1983_fig4 (reproduced in barbi-erturk2008-tab2)"},
+    {"reynolds_number": 1000, "x_r_over_h": 13.5,  "regime": "laminar",      "source": "armaly1983_fig4"},
+    {"reynolds_number": 1200, "x_r_over_h": 14.0,  "regime": "laminar_peak", "source": "armaly1983_fig4 (peak before transition onset)"},
+    {"reynolds_number": 1600, "x_r_over_h": 11.0,  "regime": "transition",   "source": "armaly1983_fig4"},
+    {"reynolds_number": 2200, "x_r_over_h": 8.5,   "regime": "transition",   "source": "armaly1983_fig4"},
+    {"reynolds_number": 4000, "x_r_over_h": 6.0,   "regime": "transition",   "source": "armaly1983_fig4"},
+    {"reynolds_number": 6600, "x_r_over_h": 6.5,   "regime": "turbulent",    "source": "armaly1983_fig4 (transitional->turbulent boundary per Armaly: 1200<Re<6600 transitional)"},
+    {"reynolds_number": 8000, "x_r_over_h": 6.5,   "regime": "turbulent",    "source": "armaly1983_fig4 (Re=8000 is the highest measured by Armaly; range studied is 70<Re<8000)"}
+  ],
+  "high_re_plateau": {
+    "x_r_over_h": 6.0,
+    "valid_for_re": ">= 6000",
+    "uncertainty": 0.5,
+    "notes": "The fully-turbulent reattachment plateau confirmed by multiple later experiments and DNS at higher Re than Armaly measured. We compare to this value when the simulation Re exceeds Armaly's range.",
+    "supporting_sources": [
+      "driver_seegmiller_1985 (AIAA Journal 23(2):163-171, Re_h=37500, x_r/h=6.26+/-0.10; note: expansion ratio ~1.13, well below Armaly's 1.94 and pitzDaily's ~2.0)",
+      "le_moin_kim_1997 (JFM 330, DNS at Re_h=5100, x_r/h=6.28)",
+      "etheridge_kemp_1978 (J. Fluid Mech. 86, x_r/h~6 turbulent regime)"
+    ]
+  },
+  "tolerance": {
+    "absolute_x_r_over_h": 1.0,
+    "rationale": "+/-1 step height (~15% of plateau) covers (a) ~+/-0.5h spread across the experimental references for the turbulent plateau, plus (b) typical k-epsilon RANS under-prediction of ~10-15% on BFS reattachment."
+  },
+  "primary_citation": "Armaly, B. F., Durst, F., Pereira, J. C. F., & Schoenung, B. (1983). Experimental and theoretical investigation of backward-facing step flow. Journal of Fluid Mechanics, 127, 473-496.",
+  "data_provenance": "Hand-encoded from approximate VISUAL READINGS of Armaly Fig. 4 (reattachment length x1 vs Reynolds number; the paper reports this graphically, not in a table), cross-checked against secondary citations (Erturk 2008 Comput. Fluids; Le-Moin-Kim 1997 JFM; Barbi-Erturk 2008 Comput. Fluids 37). Engineering precision is roughly +/-1 h; these are NOT machine-digitized -- upgrade to WebPlotDigitizer-extracted points when the JFM 127 figure or the ERCOFTAC Classic Collection Case 31 dataset is to hand. CAVEATS: (a) the laminar peak is commonly cited as x1/S ~ 15-16 near Re~1200, so the value tabulated here (14.0) sits at the low edge of the spread; (b) Armaly's range is 70<Re<8000 with regimes laminar Re<1200, transitional 1200<Re<6600, turbulent Re>6600 (verified against the JFM 127 text); (c) the high_re_plateau supporting values (Driver-Seegmiller 6.26, Le-Moin-Kim 6.28) come from LOWER-expansion-ratio geometries (~1.1) than Armaly (1.94) or the OpenFOAM pitzDaily tutorial (~2.0), so the ~6 plateau is a cross-geometry turbulent reattachment estimate rather than Armaly's own high-Re value -- it is retained because published RANS on pitzDaily reattaches near 6-7 h, within the +/-1 h tolerance.",
+  "units": "x_r_over_h is dimensionless; reynolds_number is dimensionless"
+}
