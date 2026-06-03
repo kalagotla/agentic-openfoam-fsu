@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import difflib
 import json
 import os
 import re
@@ -64,6 +65,22 @@ from automation_gate import gate_decision  # noqa: E402
 DEFAULT_ANTHROPIC_MODEL = "claude-opus-4-7"
 DEFAULT_OLLAMA_MODEL = "gpt-oss:20b"
 DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434/v1"
+
+# Iteration budgets differ by backend. A frontier Anthropic model lands a
+# clean tool call almost every turn, so 50 is ample. A 20–30B local model
+# corrupts roughly half its tool names / arguments and (for reasoning
+# models like gpt-oss) regularly burns a turn entirely in the reasoning
+# channel, returning an empty final channel — so it needs far more headroom
+# to reach a validated case. Override with ``--max-iters``.
+DEFAULT_ANTHROPIC_MAX_ITERS = 50
+DEFAULT_OLLAMA_MAX_ITERS = 150
+
+# How many non-productive turns in a row (empty final channel, or content
+# that looks like a botched tool call we could not parse) the Ollama loop
+# tolerates before giving up. A reasoning model often needs a nudge or two
+# to emit into the final channel; a genuinely wedged one would otherwise
+# spin out the whole iteration budget doing nothing.
+MAX_CONSECUTIVE_STALLS = 12
 
 # We prefix MCP tool names with their server so the agent knows which
 # server to route the call back to. Keep it filesystem-safe (no dots /
@@ -142,11 +159,168 @@ def _confirm_gate(raw_name: str, reason: str, args: dict[str, Any]) -> bool:
         return False
 
 
+# Content that "elides" a real dictionary body — what a weak model emits
+# when it can't reproduce a long file: ``"??"``, ``"..."``, ``"…"``, ``""``.
+# Real OpenFOAM dicts always carry keywords, so an all-punctuation body
+# under a few dozen characters is unambiguously a placeholder.
+_PLACEHOLDER_CONTENT_RE = re.compile(r"[\s?.=…\-_*]*")
+
+
+def _is_placeholder_dict_content(content: Any) -> bool:
+    """True if ``write_dict`` content is empty or an elision placeholder."""
+    if not isinstance(content, str):
+        return True
+    stripped = content.strip()
+    if not stripped:
+        return True
+    return len(stripped) < 40 and bool(_PLACEHOLDER_CONTENT_RE.fullmatch(stripped))
+
+
+def _normalize_case_path(
+    prefixed_name: str,
+    args: dict[str, Any],
+    tools_with_case_path: set[str],
+    known_case_paths: list[str],
+) -> str | None:
+    """Force the ``case_path`` argument to the case directory the harness
+    pre-created this run.
+
+    Weak local models corrupt the long absolute path they must echo on
+    every call (observed: ``"=??"``, ``"$HOME/some"``,
+    ``"…/cases/work/lid-cont…???…"``). In this harness there is exactly
+    one case directory per scenario, and it is the only valid target for
+    any ``case_path``-taking tool, so substituting the known path whenever
+    the model's value doesn't already match it is always correct. When the
+    prompt referenced zero or several scenarios the substitution is
+    ambiguous, so leave the argument untouched.
+
+    Mutates ``args`` in place. Returns a one-line note when it changed
+    something (for the operator log), else ``None``.
+    """
+    if prefixed_name not in tools_with_case_path or len(known_case_paths) != 1:
+        return None
+    canonical = known_case_paths[0]
+    given = args.get("case_path")
+    if given == canonical:
+        return None
+    args["case_path"] = canonical
+    if given is None:
+        return f"injected case_path={canonical} (model omitted it)"
+    return f"corrected case_path {given!r} -> {canonical}"
+
+
+def _closest_tool_name(
+    garbled: str, route: dict[str, tuple[str, str]]
+) -> str | None:
+    """Snap a corrupted tool *name* back to the real one.
+
+    Weak local models corrupt the tool name itself, not just its
+    arguments (observed: ``"openfoam__copy_tpatch?"`` for
+    ``copy_tutorial_dict``, ``"open..??"``). When exactly one known tool
+    is a clear closest match we can route the call correctly; when the
+    corruption is too severe to disambiguate (``"open..??"`` matches
+    nothing well) we return ``None`` and let the caller report an
+    unknown-tool error rather than dispatch to a guessed tool.
+    """
+    matches = difflib.get_close_matches(garbled, list(route), n=2, cutoff=0.6)
+    if not matches:
+        return None
+    best = matches[0]
+    if len(matches) > 1:
+        # Require the winner to be clearly ahead of the runner-up so an
+        # ambiguous garble never silently dispatches to the wrong tool.
+        r_best = difflib.SequenceMatcher(None, garbled, best).ratio()
+        r_next = difflib.SequenceMatcher(None, garbled, matches[1]).ratio()
+        if r_best - r_next < 0.1:
+            return None
+    return best
+
+
+def _unwrap_tool_envelope(args: dict[str, Any]) -> dict[str, Any]:
+    """Unwrap an OpenAI tool-call envelope a model echoed INTO its arguments.
+
+    Some weak models emit ``{"name": "<tool>", "arguments": "{...}"}`` as the
+    *arguments* of an already-named tool call — the call envelope nested one
+    level too deep (the inner ``arguments`` is usually a JSON string). Detect
+    that exact shape and return the inner argument dict so the real call goes
+    through; otherwise return ``args`` unchanged.
+    """
+    if not isinstance(args, dict) or "arguments" not in args:
+        return args
+    if not set(args) <= {"name", "arguments", "parameters"}:
+        return args
+    inner = args.get("arguments", args.get("parameters"))
+    if isinstance(inner, str):
+        try:
+            inner = json.loads(inner)
+        except json.JSONDecodeError:
+            return args
+    return inner if isinstance(inner, dict) else args
+
+
+def _backfill_record_step(args: dict[str, Any]) -> list[str]:
+    """Fill in ``record_step``'s required fields when a weak model omits them.
+
+    ``record_step`` is optional narration, but ``phase`` / ``status`` /
+    ``title`` have no defaults, so a single omission triggers a hard schema
+    rejection that derails the run (observed: a model that supplies rich
+    ``decision`` / ``why`` fields but drops ``title``, then loops on the
+    error). The narration is worth keeping when the model did supply the
+    reasoning, so synthesize the missing scaffolding rather than fail.
+
+    Mutates ``args`` in place. Returns one note per field filled.
+    """
+    if not isinstance(args, dict):
+        return []
+    notes: list[str] = []
+    if not args.get("status"):
+        args["status"] = "info"
+        notes.append("filled record_step status='info'")
+    if not args.get("phase"):
+        args["phase"] = "note"
+        notes.append("filled record_step phase='note'")
+    if not str(args.get("title") or "").strip():
+        seed = str(args.get("decision") or args.get("phase") or "progress note").strip()
+        args["title"] = seed[:80] or "progress note"
+        notes.append(f"filled record_step title={args['title']!r}")
+    return notes
+
+
+def _repair_unknown_kwargs(args: dict[str, Any], allowed: set[str]) -> list[str]:
+    """Rename or drop argument keys the tool's schema doesn't define.
+
+    Weak local models invent slightly-wrong keyword names (observed:
+    ``retries_of`` for ``retry_of``). FastMCP validates strictly and
+    rejects the *entire* call on a single unexpected keyword, so a
+    one-character slip wastes a whole turn. When an unknown key clearly
+    matches exactly one real parameter we rename it; otherwise we drop it,
+    so a genuinely missing required argument surfaces as a clean
+    missing-argument error instead of an opaque unexpected-keyword one.
+
+    Mutates ``args`` in place. Returns one note per repair (for the log).
+    """
+    if not allowed or not isinstance(args, dict):
+        return []
+    notes: list[str] = []
+    for key in [k for k in args if k not in allowed]:
+        match = difflib.get_close_matches(key, sorted(allowed), n=1, cutoff=0.72)
+        if match and match[0] not in args:
+            args[match[0]] = args.pop(key)
+            notes.append(f"renamed arg {key!r} -> {match[0]!r}")
+        else:
+            args.pop(key)
+            notes.append(f"dropped unknown arg {key!r}")
+    return notes
+
+
 async def call_tool(
     sessions: dict[str, ClientSession],
     route: dict[str, tuple[str, str]],
     prefixed_name: str,
     args: dict[str, Any],
+    tools_with_case_path: set[str] | None = None,
+    known_case_paths: list[str] | None = None,
+    tool_arg_names: dict[str, set[str]] | None = None,
 ) -> tuple[str, bool]:
     """Invoke a tool via the appropriate MCP session.
 
@@ -154,10 +328,103 @@ async def call_tool(
     of content blocks; we join the text blocks together — the four
     servers in this repo all return either JSON-serializable dicts or
     short strings, so this is sufficient.
+
+    Before dispatch, several repairs guard against the garbage weak local
+    models feed into tool calls: a corrupted tool *name* is snapped back to
+    the nearest real tool, ``case_path`` is snapped back to the pre-created
+    case directory, argument keys the schema doesn't define are renamed or
+    dropped (a one-character slip like ``retries_of`` no longer fails the
+    whole call), and a ``write_dict`` call carrying empty / placeholder
+    ``content`` (or record_step's arguments by mistake) is bounced back with
+    a corrective error instead of writing a junk file. A frontier model
+    never trips these, so they are inert on the Anthropic backend.
     """
     if prefixed_name not in route:
-        return (f"Error: unknown tool '{prefixed_name}'", True)
+        repaired = _closest_tool_name(prefixed_name, route)
+        if repaired is None:
+            return (f"Error: unknown tool '{prefixed_name}'", True)
+        print(
+            f"[harness] corrected tool name {prefixed_name!r} -> {repaired}",
+            file=sys.stderr,
+        )
+        prefixed_name = repaired
     server, raw_name = route[prefixed_name]
+
+    # Unwrap a tool-call envelope the model nested into its own arguments
+    # before anything reads the (otherwise nested) real arguments.
+    unwrapped = _unwrap_tool_envelope(args)
+    if unwrapped is not args:
+        print("[harness] unwrapped nested tool-call envelope from arguments", file=sys.stderr)
+        args = unwrapped
+
+    note = _normalize_case_path(
+        prefixed_name, args, tools_with_case_path or set(), known_case_paths or []
+    )
+    if note is not None:
+        print(f"[harness] {note}", file=sys.stderr)
+
+    if tool_arg_names is not None:
+        for kw_note in _repair_unknown_kwargs(
+            args, tool_arg_names.get(prefixed_name, set())
+        ):
+            print(f"[harness] {kw_note}", file=sys.stderr)
+
+    # record_step is optional narration; never let a missing required field
+    # hard-fail it and derail the run. Backfill phase/status/title.
+    if raw_name == "record_step":
+        for rs_note in _backfill_record_step(args):
+            print(f"[harness] {rs_note}", file=sys.stderr)
+
+    # Once the run's case directory holds authored files, a ``prepare_case``
+    # on it is never the right move: with ``overwrite=False`` the tool
+    # refuses (non-empty dir) and weak models misread that refusal as a hard
+    # block and abandon the run; with ``overwrite=True`` it would ``rmtree``
+    # every dict and the mesh authored so far. Intercept the non-empty case
+    # with a guiding no-op pointing back at the productive path — overwrite
+    # the one bad file in place. An *empty* pre-created dir falls through so
+    # the normal first-call ``prepare_case`` (the Anthropic workflow opens
+    # with one) still runs.
+    if raw_name == "prepare_case" and args.get("case_path") in (known_case_paths or []):
+        case_dir = Path(args["case_path"])
+        if case_dir.is_dir() and any(case_dir.iterdir()):
+            print("[harness] intercepted prepare_case on the run's non-empty case dir", file=sys.stderr)
+            return (
+                json.dumps(
+                    {
+                        "success": True,
+                        "note": (
+                            "The case directory already exists and holds your authored "
+                            "files — you do not need prepare_case. To fix a file you got "
+                            "wrong, call write_dict or copy_tutorial_dict again with the "
+                            "same dict_name; it overwrites in place. Do NOT clear or "
+                            "recreate the directory and do NOT abandon the run over "
+                            "leftover files — just re-author the offending dict and re-run."
+                        ),
+                    }
+                ),
+                False,
+            )
+
+    if raw_name == "write_dict":
+        if not args.get("content") and any(
+            k in args for k in ("decision", "phase", "status", "when_it_breaks")
+        ):
+            return (
+                "Error: this looks like a record_step call sent to write_dict. "
+                "To narrate a step, call record_step with phase/status/title. "
+                "write_dict needs case_path, dict_name, subdir, and the FULL "
+                "file text in `content`.",
+                True,
+            )
+        if _is_placeholder_dict_content(args.get("content")):
+            return (
+                "Error: write_dict `content` was empty or a placeholder "
+                "('??', '...'). Never abbreviate file content. Prefer "
+                "copy_tutorial_dict to transfer a tutorial file verbatim; only "
+                "use write_dict with the complete dictionary text (FoamFile "
+                "header through trailing separator) when no tutorial matches.",
+                True,
+            )
 
     # Human-in-the-loop: pause before gated phases per automation_level.
     decision, reason = gate_decision(raw_name, args)
@@ -208,6 +475,9 @@ async def run_anthropic(
     system_prompt: str,
     user_prompt: str,
     max_iters: int,
+    tools_with_case_path: set[str],
+    known_case_paths: list[str],
+    tool_arg_names: dict[str, set[str]],
 ) -> None:
     """Drive the agent loop against Anthropic's tool-use API."""
     try:
@@ -256,7 +526,10 @@ async def run_anthropic(
         tool_results: list[dict[str, Any]] = []
         for tu in tool_uses:
             print(f"[tool] {tu.name}({json.dumps(tu.input)[:120]}...)")
-            content, is_error = await call_tool(sessions, route, tu.name, tu.input)
+            content, is_error = await call_tool(
+                sessions, route, tu.name, tu.input,
+                tools_with_case_path, known_case_paths, tool_arg_names,
+            )
             entry: dict[str, Any] = {
                 "type": "tool_result",
                 "tool_use_id": tu.id,
@@ -294,16 +567,24 @@ _TOOL_CALL_HINTS = ('"name"', "'name'", "tool_call", "function_call", "<|tool_ca
 _SCENARIO_RE = re.compile(r"cases/scenarios/([A-Za-z0-9_\-]+)\.yaml")
 
 
-def _inline_referenced_scenarios(prompt: str, repo_root: Path) -> str:
+def _inline_referenced_scenarios(
+    prompt: str, repo_root: Path
+) -> tuple[str, list[str]]:
     """If the user's prompt references ``cases/scenarios/<name>.yaml``,
     inline the file contents and pre-create ``cases/work/<name>/`` so a
     local model without a generic file-read tool — and without a
     case-directory-creation MCP tool — can still get the case set up.
     Claude Code papers over both gaps via its built-in Read/Bash tools;
     the bare harness needs the explicit pre-injection.
+
+    Returns ``(prompt, work_dirs)`` where ``work_dirs`` is the list of
+    absolute case directories created here. The harness uses it to
+    auto-correct the ``case_path`` argument when a weak model corrupts
+    the long absolute path it is asked to echo on every tool call.
     """
     seen: set[str] = set()
     extras: list[str] = []
+    work_dirs: list[str] = []
     for match in _SCENARIO_RE.finditer(prompt):
         rel = match.group(0)
         if rel in seen:
@@ -322,6 +603,7 @@ def _inline_referenced_scenarios(prompt: str, repo_root: Path) -> str:
         work_dir = repo_root / "cases" / "work" / scenario_name
         work_dir.mkdir(parents=True, exist_ok=True)
         abs_work_dir = str(work_dir.resolve())
+        work_dirs.append(abs_work_dir)
         extras.append(
             f"\n\n=== Inlined contents of {rel} ===\n{content}\n=== end {rel} ===\n"
             f"\nIMPORTANT — case directory.\n"
@@ -333,7 +615,8 @@ def _inline_referenced_scenarios(prompt: str, repo_root: Path) -> str:
             f"do not use a relative path, do not prepend `/home/` or any other\n"
             f"prefix. The path above is the one and only correct case_path."
         )
-    return prompt + "".join(extras) if extras else prompt
+    final_prompt = prompt + "".join(extras) if extras else prompt
+    return final_prompt, work_dirs
 
 
 def _looks_like_attempted_tool_call(content: str) -> bool:
@@ -409,6 +692,9 @@ async def run_ollama(
     system_prompt: str,
     user_prompt: str,
     max_iters: int,
+    tools_with_case_path: set[str],
+    known_case_paths: list[str],
+    tool_arg_names: dict[str, set[str]],
 ) -> None:
     """Drive the agent loop against Ollama's OpenAI-compatible API."""
     try:
@@ -429,6 +715,19 @@ async def run_ollama(
         {"role": "user", "content": user_prompt},
     ]
 
+    # Consecutive non-productive turns (rejected/garbled tool call or an
+    # empty final channel). Reset to 0 the moment the model emits a real
+    # tool call. Bounds an otherwise-silent spin if the model wedges.
+    stalls = 0
+
+    # Has the solver completed a successful run yet? Weak models tend to
+    # "finish" with a prose summary while the solver is still erroring on a
+    # dictionary, so we refuse to accept a final answer until at least one
+    # ``run_solver`` has succeeded. A successful run is the only result that
+    # carries ``walltime_s`` (failures return just reason + log_tail), which
+    # makes this signal independent of the possibly-garbled tool name.
+    solver_ran_ok = False
+
     for iteration in range(max_iters):
         try:
             response = await client.chat.completions.create(
@@ -444,15 +743,24 @@ async def run_ollama(
             # rather than aborting the whole run.
             err_text = str(exc)
             if "error parsing tool call" in err_text or "InternalServerError" in type(exc).__name__:
-                print(f"[harness] Ollama rejected the model's tool call: {err_text[:200]}")
+                stalls += 1
+                print(
+                    f"[harness] Ollama rejected the model's tool call "
+                    f"({stalls}/{MAX_CONSECUTIVE_STALLS}): {err_text[:200]}"
+                )
+                if stalls >= MAX_CONSECUTIVE_STALLS:
+                    print(f"\n[harness] {stalls} non-productive turns in a row; stopping.")
+                    return
                 messages.append(
                     {
                         "role": "user",
                         "content": (
                             "Your previous tool call could not be parsed by the runtime. "
                             "Emit exactly one well-formed tool call (valid JSON arguments, "
-                            "no surrounding prose, no chat-template tokens), or reply with "
-                            "a final plain-text summary if you are done."
+                            "no surrounding prose, no chat-template tokens). Do NOT use "
+                            "elision placeholders like \"...\" or \"??\" anywhere in the "
+                            "arguments — write every value in full or omit the key. Or "
+                            "reply with a final plain-text summary if you are done."
                         ),
                     }
                 )
@@ -505,7 +813,14 @@ async def run_ollama(
             # In the latter case, push a corrective message and let it
             # try again instead of silently terminating mid-task.
             if _looks_like_attempted_tool_call(msg.content or ""):
-                print("[harness] content looks like an attempted tool call but didn't parse — sending corrective message.")
+                stalls += 1
+                print(
+                    "[harness] content looks like an attempted tool call but didn't "
+                    f"parse ({stalls}/{MAX_CONSECUTIVE_STALLS}) — sending corrective message."
+                )
+                if stalls >= MAX_CONSECUTIVE_STALLS:
+                    print(f"\n[harness] {stalls} non-productive turns in a row; stopping.")
+                    return
                 messages.append(
                     {
                         "role": "user",
@@ -515,17 +830,29 @@ async def run_ollama(
                             "OpenAI tool_calls format (or, if you must inline it, a single "
                             "valid JSON object on its own with the keys \"name\" and "
                             "\"arguments\" — no chat-template tokens, no surrounding text, "
-                            "no trailing escape characters). If you are finished, reply "
-                            "with a plain-text summary instead."
+                            "no trailing escape characters, and no elision placeholders "
+                            "like \"...\" or \"??\" inside the arguments). If you are "
+                            "finished, reply with a plain-text summary instead."
                         ),
                     }
                 )
                 continue
-            # Truly empty response: model emitted neither tool_calls nor
-            # final-answer text. Most common with reasoning models that
-            # hit the token cap during internal reasoning. Nudge them.
-            if not (msg.content or "").strip() and finish_reason in ("length", "stop"):
-                print(f"[harness] empty response (finish_reason={finish_reason}); nudging the model to continue.")
+            # Empty response: the model emitted neither a tool call nor any
+            # final-answer text. This is the dominant outcome for a reasoning
+            # model like gpt-oss, which routinely spends a whole turn in its
+            # reasoning channel and returns an empty final channel — and it
+            # does so with finish_reason "length", "stop", OR None. An empty
+            # turn is never task completion, so nudge regardless of the
+            # finish_reason rather than mistaking the silence for "done".
+            if not (msg.content or "").strip():
+                stalls += 1
+                print(
+                    f"[harness] empty response (finish_reason={finish_reason}); nudging "
+                    f"the model to continue ({stalls}/{MAX_CONSECUTIVE_STALLS})."
+                )
+                if stalls >= MAX_CONSECUTIVE_STALLS:
+                    print(f"\n[harness] {stalls} empty turns in a row; stopping.")
+                    return
                 messages.append(
                     {
                         "role": "user",
@@ -537,9 +864,41 @@ async def run_ollama(
                     }
                 )
                 continue
+            # Real final-answer prose with no tool call. Only accept it as
+            # "done" once the solver has actually run — otherwise a weak model
+            # ends the run with a plan/summary while the case is still failing
+            # to solve (observed: it narrates "rerun simpleFoam" instead of
+            # calling run_solver). Nudge it back to executing the fix.
+            if not solver_ran_ok:
+                stalls += 1
+                print(
+                    "[harness] model tried to finish but the solver has not run "
+                    f"successfully yet ({stalls}/{MAX_CONSECUTIVE_STALLS}); nudging to continue."
+                )
+                if stalls >= MAX_CONSECUTIVE_STALLS:
+                    print(f"\n[harness] {stalls} non-productive turns in a row; stopping.")
+                    return
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            "You are NOT done: the solver has not completed a successful "
+                            "run yet. Do not stop and do not just describe what to do — "
+                            "DO it. Read the most recent run_solver error (its log_tail "
+                            "names the dictionary and line at fault), fix that file in "
+                            "place by calling write_dict or copy_tutorial_dict, then call "
+                            "run_solver again. Only once the solver runs to a converged "
+                            "result should you move on to validation."
+                        ),
+                    }
+                )
+                continue
             print(f"\n[harness] done after {iteration + 1} iteration(s). (finish_reason={finish_reason})")
             return
 
+        # The model emitted at least one real tool call — forward progress,
+        # so the stall streak is broken.
+        stalls = 0
         for c in normalized_calls:
             args = c["arguments"]
             if isinstance(args, dict) and "__parse_error__" in args:
@@ -547,7 +906,12 @@ async def run_ollama(
                 messages.append({"role": "tool", "tool_call_id": c["id"], "content": err})
                 continue
             print(f"[tool] {c['name']}({json.dumps(args)[:120]}...)")
-            content, _is_error = await call_tool(sessions, route, c["name"], args)
+            content, _is_error = await call_tool(
+                sessions, route, c["name"], args,
+                tools_with_case_path, known_case_paths, tool_arg_names,
+            )
+            if '"walltime_s"' in content:
+                solver_ran_ok = True
             messages.append({"role": "tool", "tool_call_id": c["id"], "content": content})
 
     print(f"\n[harness] hit max-iters ({max_iters}); stopping.")
@@ -596,7 +960,7 @@ async def amain(args: argparse.Namespace) -> None:
     repo_root = Path(__file__).resolve().parents[1]
     mcp_config = load_mcp_config(repo_root, args.mcp_config)
     system_prompt = load_system_prompt(repo_root, args.backend, args.system_prompt_file)
-    user_prompt = _inline_referenced_scenarios(args.prompt, repo_root)
+    user_prompt, known_case_paths = _inline_referenced_scenarios(args.prompt, repo_root)
     if user_prompt != args.prompt:
         print("[harness] inlined referenced scenario YAML(s) into the prompt.", file=sys.stderr)
 
@@ -608,6 +972,30 @@ async def amain(args: argparse.Namespace) -> None:
             file=sys.stderr,
         )
 
+        # Per-tool argument-name maps, both derived from the schemas the
+        # servers advertise (no hardcoded lists): which tools take a
+        # ``case_path`` (for path auto-correction), and the full set of
+        # valid argument names per tool (for unknown-kwarg repair).
+        tools_with_case_path = {
+            t["name"]
+            for t in tools
+            if "case_path" in ((t["input_schema"] or {}).get("properties") or {})
+        }
+        tool_arg_names = {
+            t["name"]: set(((t["input_schema"] or {}).get("properties") or {}).keys())
+            for t in tools
+        }
+
+        # A frontier model lands a clean call almost every turn; a local
+        # 20–30B model wastes many turns on garbled calls, so it gets a
+        # larger budget. An explicit --max-iters overrides either default.
+        if args.max_iters is not None:
+            max_iters = args.max_iters
+        elif args.backend == "ollama":
+            max_iters = DEFAULT_OLLAMA_MAX_ITERS
+        else:
+            max_iters = DEFAULT_ANTHROPIC_MAX_ITERS
+
         if args.backend == "anthropic":
             await run_anthropic(
                 sessions=sessions,
@@ -616,7 +1004,10 @@ async def amain(args: argparse.Namespace) -> None:
                 model=args.model or DEFAULT_ANTHROPIC_MODEL,
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
-                max_iters=args.max_iters,
+                max_iters=max_iters,
+                tools_with_case_path=tools_with_case_path,
+                known_case_paths=known_case_paths,
+                tool_arg_names=tool_arg_names,
             )
         elif args.backend == "ollama":
             await run_ollama(
@@ -627,7 +1018,10 @@ async def amain(args: argparse.Namespace) -> None:
                 base_url=args.ollama_base_url,
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
-                max_iters=args.max_iters,
+                max_iters=max_iters,
+                tools_with_case_path=tools_with_case_path,
+                known_case_paths=known_case_paths,
+                tool_arg_names=tool_arg_names,
             )
         else:
             sys.exit(f"Unknown backend: {args.backend}")
@@ -659,8 +1053,11 @@ def main() -> None:
     parser.add_argument(
         "--max-iters",
         type=int,
-        default=50,
-        help="Hard cap on agent iterations (each iteration = one model call + any tool calls).",
+        default=None,
+        help="Hard cap on agent iterations (each iteration = one model call + any "
+        f"tool calls). Default depends on backend: {DEFAULT_ANTHROPIC_MAX_ITERS} "
+        f"for anthropic, {DEFAULT_OLLAMA_MAX_ITERS} for ollama (which wastes more "
+        "turns on garbled tool calls).",
     )
     parser.add_argument(
         "--mcp-config",

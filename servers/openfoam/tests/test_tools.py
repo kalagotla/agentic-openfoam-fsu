@@ -409,7 +409,10 @@ class TestExportFieldImageEndToEnd:
 
     def test_render_velocity_field(self, baseline_copy: Path) -> None:
         run_blockmesh(str(baseline_copy))
-        run_solver(str(baseline_copy), "simpleFoam", end_time=10.0)
+        # writeInterval is 100 timeSteps, so the solve must reach at least
+        # t=100 to write a result directory the reader can render — t=10
+        # leaves only 0/ and ParaView finds no fields.
+        run_solver(str(baseline_copy), "simpleFoam", end_time=100.0)
         result = export_field_image(str(baseline_copy), "U")
         assert result["success"] is True, result
         image = Path(result["image_path"])
@@ -423,7 +426,10 @@ class TestExportFieldImageEndToEnd:
 
     def test_unknown_field_returns_field_not_found(self, baseline_copy: Path) -> None:
         run_blockmesh(str(baseline_copy))
-        run_solver(str(baseline_copy), "simpleFoam", end_time=10.0)
+        # writeInterval is 100 timeSteps, so the solve must reach at least
+        # t=100 to write a result directory the reader can render — t=10
+        # leaves only 0/ and ParaView finds no fields.
+        run_solver(str(baseline_copy), "simpleFoam", end_time=100.0)
         result = export_field_image(str(baseline_copy), "definitelyNotAField")
         assert result["success"] is False
         assert result["reason"] == "field_not_found"

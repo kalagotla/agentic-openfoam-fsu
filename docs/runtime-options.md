@@ -138,3 +138,4 @@ The agent should call `validation.list_references` and report at least four data
 | LiteLLM proxy: 401 / model not found | `ANTHROPIC_API_KEY` unset or model name not in `scripts/litellm_proxy.yaml` | `export ANTHROPIC_API_KEY=sk-anything`; add the model alias in the YAML |
 | `mcp` package import error | Top-level deps not synced | `uv sync` from the repo root |
 | Docker build fails on `apt-get` | Container network | Check Docker daemon network config, retry |
+| `docker build` fails on Windows (WSL / kernel / platform version error) | Docker Desktop needs a current WSL2 backend; a native-Windows checkout can also mangle line endings | Build from inside a WSL2 distro, cloning into the WSL2 filesystem (not `/mnt/c/...`); `wsl --update` and enable Docker Desktop's WSL integration |

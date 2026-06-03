@@ -72,7 +72,7 @@ Four MCP servers (`openfoam`, `validation`, `consultant`, `research_assistant`) 
 | Path | What you need | First-run time |
 |---|---|---|
 | **Native** | OpenFOAM v2412 + git + uv | ~5 min |
-| **Docker** | [Docker](https://docs.docker.com/get-docker/) | ~25 min build, instant after |
+| **Docker** | [Docker](https://docs.docker.com/get-docker/) — WSL2 on Windows | ~30 min first build, instant after |
 | **Dev Container** | VS Code + Dev Containers extension | ~25 min build, instant after |
 
 ### Native
@@ -87,16 +87,74 @@ cd cases/examples/pitz-daily/baseline && ./Allrun && cd -    # smoke-test
 
 ### Docker
 
+The image is self-contained: OpenFOAM v2412, ParaView (headless rendering),
+the four MCP servers, the `run_agent.py` harness, and the agent runtimes —
+the Claude Code CLI (`claude`), the `anthropic` Python SDK, Ollama for local
+models, and the LiteLLM proxy. No API keys or model weights are baked in.
+
+**Windows:** install WSL2 first from an **admin PowerShell**, reboot, then
+open the **Ubuntu** terminal and run everything below inside it. (macOS:
+install Docker Desktop. Linux: nothing extra.)
+```powershell
+wsl --install
+```
+
+Clone the repo and run the bring-up script — it installs Docker if missing,
+builds the image, smoke-tests it, and drops you into a shell in `/workspace`:
 ```bash
 git clone https://github.com/kalagotla/agentic-openfoam.git
 cd agentic-openfoam
-docker build -t agentic-openfoam .
-docker run --rm -it agentic-openfoam
+export ANTHROPIC_API_KEY=sk-ant-...   # optional; passed into the container
+./scripts/docker-up.sh                # first build ~30 min, image ~10 GB
 ```
+
+Inside the container you start in `/workspace` with OpenFOAM sourced:
+```bash
+uv run pytest                                            # 329 tests
+uv run scripts/run_agent.py --backend anthropic --help   # the agent harness
+claude                                                   # Claude Code CLI
+ollama serve &                                           # local-model server
+ollama pull gpt-oss:20b                                  # pull a model (multi-GB, CPU-only here)
+```
+
+<details>
+<summary><b>What <code>docker-up.sh</code> does — or run it by hand</b></summary>
+
+```bash
+# 1. Install Docker in the WSL distro (skip on macOS/Linux if already present)
+sudo apt-get update && sudo apt-get install -y docker.io
+sudo service docker start
+sudo usermod -aG docker "$USER"          # then reopen the terminal (or: wsl --shutdown)
+
+# 2. Build, smoke-test, and open a shell
+docker build -t agentic-openfoam .
+docker run --rm agentic-openfoam bash -lc 'cd /workspace && uv run pytest'
+docker run --rm -it agentic-openfoam     # -it required; a bare `docker run` exits at once
+```
+</details>
 
 ### Dev Container
 
 Install the *Dev Containers* extension in VS Code. Open the repo → Command Palette → *Dev Containers: Reopen in Container*. Details in [`.devcontainer/README.md`](.devcontainer/README.md).
+
+### Teardown
+
+`docker-down.sh` removes the image, its containers, and the build cache. Add
+`--repo` to also delete the checkout, `--docker` to uninstall docker.io:
+```bash
+./scripts/docker-down.sh                 # optionally: --repo --docker
+```
+
+<details>
+<summary><b>What it does — or run it by hand</b></summary>
+
+```bash
+docker rm -f $(docker ps -aq --filter ancestor=agentic-openfoam) 2>/dev/null || true
+docker rmi agentic-openfoam
+docker builder prune -f
+cd .. && sudo rm -rf agentic-openfoam    # sudo: a -v mount run can leave root-owned files
+```
+</details>
 
 ## Run
 
