@@ -1,10 +1,15 @@
 {
   "mcpServers": {
     "openfoam": {
-      "command": "bash",
+      "command": "scripts/with-openfoam.sh",
       "args": [
-        "-c",
-        "source /usr/lib/openfoam/openfoam2412/etc/bashrc && exec uv run --package openfoam-mcp python -m openfoam_mcp"
+        "uv",
+        "run",
+        "--package",
+        "openfoam-mcp",
+        "python",
+        "-m",
+        "openfoam_mcp"
       ]
     },
     "validation": {
@@ -30,10 +35,15 @@
       ]
     },
     "research_assistant": {
-      "command": "bash",
+      "command": "scripts/with-openfoam.sh",
       "args": [
-        "-c",
-        "source /usr/lib/openfoam/openfoam2412/etc/bashrc && exec uv run --package research-assistant-mcp python -m research_assistant_mcp"
+        "uv",
+        "run",
+        "--package",
+        "research-assistant-mcp",
+        "python",
+        "-m",
+        "research_assistant_mcp"
       ]
     }
   }

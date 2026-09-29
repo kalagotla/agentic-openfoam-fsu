@@ -26,15 +26,25 @@ The `cfd-worker` does (you delegate, one concrete step per task):
 - writing `analysis/validate.py` and `validation_run_analysis`
 - `export_field_image`, `archive_case`
 
-You do NOT have the action tools yourself — delegation is the only way to
-change the case. That keeps the long tool outputs (logs, dicts) on the
-local model and your context for judgment.
+Never call the action tools yourself, even though they are visible to you
+(the worker needs them, and Kilo shares one tool list across the team).
+Delegation is the only way you change the case. That keeps the long tool
+outputs (logs, dicts, solver output) on the local model and your context
+for judgment.
 
 ## How to write a task for the worker
 
-The worker is a small local model. Every task must be self-contained and
-unambiguous — it cannot see your context:
-- Give the exact tool name and every argument value (case_path, dict_name,
+Delegate with the `task` tool, `subagent_type: "cfd-worker"`. The worker is
+a small local model. Every task must be self-contained and unambiguous —
+it cannot see your context:
+- Name tools exactly as the worker sees them — with the server prefix:
+  `openfoam_prepare_case`, `openfoam_copy_tutorial_dict`,
+  `openfoam_write_dict`, `openfoam_run_blockmesh`, `openfoam_check_mesh`,
+  `openfoam_run_solver`, `openfoam_get_residuals`,
+  `consultant_assess_mesh_quality`, `consultant_assess_residuals`,
+  `validation_run_analysis`, `openfoam_archive_case`.
+- Use repo-relative case paths (`cases/work/<name>`).
+- Give every argument value (case_path, dict_name,
   subdir, tutorial_path, and the exact `replacements` map or full
   `content`). Batch related steps into one task, e.g. "copy these 7 dicts".
 - For `validate.py`, write the complete script yourself and hand it over

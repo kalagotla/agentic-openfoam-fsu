@@ -102,3 +102,7 @@ scripts/eval/results/
 .kilo/kilo.jsonc
 .local-model
 setup.log
+
+# HPC: Apptainer image + build cache (setup.sh --hpc).
+.hpc/
+.doctor.*/

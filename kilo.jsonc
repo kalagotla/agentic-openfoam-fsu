@@ -28,7 +28,7 @@
   "mcp": {
     "openfoam": {
       "type": "local",
-      "command": ["bash", "-c", "source /usr/lib/openfoam/openfoam2412/etc/bashrc && exec uv run --package openfoam-mcp python -m openfoam_mcp"],
+      "command": ["scripts/with-openfoam.sh", "uv", "run", "--package", "openfoam-mcp", "python", "-m", "openfoam_mcp"],
       "timeout": 60000
     },
     "validation": {
@@ -43,7 +43,7 @@
     },
     "research_assistant": {
       "type": "local",
-      "command": ["bash", "-c", "source /usr/lib/openfoam/openfoam2412/etc/bashrc && exec uv run --package research-assistant-mcp python -m research_assistant_mcp"],
+      "command": ["scripts/with-openfoam.sh", "uv", "run", "--package", "research-assistant-mcp", "python", "-m", "research_assistant_mcp"],
       "timeout": 60000
     }
   },
@@ -71,28 +71,10 @@
     "cfd-orchestrator": {
       "mode": "primary",
       "description": "Frontier model plans and judges; delegates tool work to the local cfd-worker.",
-      "prompt": "{file:./.kilo/prompts/cfd-orchestrator.md}",
-      // No action tools: changing the case has to go through cfd-worker.
-      "tools": {
-        "openfoam_prepare_case": false,
-        "openfoam_write_dict": false,
-        "openfoam_copy_tutorial_dict": false,
-        "openfoam_run_blockmesh": false,
-        "openfoam_check_mesh": false,
-        "openfoam_prepare_surface_mesh": false,
-        "openfoam_run_snappy_hex_mesh": false,
-        "openfoam_decompose_par": false,
-        "openfoam_reconstruct_par": false,
-        "openfoam_run_solver": false,
-        "openfoam_get_residuals": false,
-        "openfoam_export_field_image": false,
-        "openfoam_archive_case": false,
-        "validation_run_analysis": false,
-        "research_assistant_wmake_and_report": false,
-        "write": false,
-        "edit": false,
-        "bash": false
-      }
+      "prompt": "{file:./.kilo/prompts/cfd-orchestrator.md}"
+      // Delegation is enforced by the prompt, not by removing tools: Kilo
+      // applies an agent's `tools`/`permission` denials to the subagents it
+      // spawns, so denying the action tools here would strip cfd-worker too.
     },
     "cfd-worker": {
       "mode": "subagent",

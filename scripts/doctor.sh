@@ -11,7 +11,6 @@ set -uo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_DIR"
 export PATH="$HOME/.local/bin:$PATH"
-OF_BASHRC=/usr/lib/openfoam/openfoam2412/etc/bashrc
 
 fails=0
 pass() { printf '  \033[1;32m✓\033[0m %s\n' "$*"; }
@@ -21,26 +20,18 @@ have() { command -v "$1" >/dev/null 2>&1; }
 
 echo "agentic-openfoam doctor"
 
-# OpenFOAM: source it and mesh + solve a few steps of the cavity tutorial.
-if [[ -f $OF_BASHRC ]]; then
-    tmp=$(mktemp -d)
-    if (
-        set +u
-        # shellcheck disable=SC1090
-        source "$OF_BASHRC" >/dev/null 2>&1
-        cp -r "$FOAM_TUTORIALS/incompressible/icoFoam/cavity/cavity" "$tmp/c" &&
-            sed -i 's/^endTime .*/endTime 0.01;/' "$tmp/c/system/controlDict" &&
-            blockMesh -case "$tmp/c" >/dev/null 2>&1 &&
-            icoFoam -case "$tmp/c" >/dev/null 2>&1
-    ); then
-        pass "OpenFOAM v2412 meshes and solves (cavity tutorial)"
-    else
-        fail "OpenFOAM is installed but the cavity smoke test failed"
-    fi
-    rm -rf "$tmp"
+# OpenFOAM (apt install or HPC Apptainer image, via the same wrapper the MCP
+# servers use): mesh + solve a few steps of the cavity tutorial.
+tmp=$(mktemp -d -p "$REPO_DIR" .doctor.XXXX)
+if scripts/with-openfoam.sh bash -c '
+        cp -r "$FOAM_TUTORIALS/incompressible/icoFoam/cavity/cavity" "$1/c" &&
+        sed -i "s/^endTime .*/endTime 0.01;/" "$1/c/system/controlDict" &&
+        blockMesh -case "$1/c" && icoFoam -case "$1/c"' bash "$tmp" >/dev/null 2>&1; then
+    pass "OpenFOAM v2412 meshes and solves (cavity tutorial)"
 else
-    fail "OpenFOAM v2412 not found at $OF_BASHRC — run ./setup.sh"
+    fail "OpenFOAM v2412 not usable — run ./setup.sh (scripts/with-openfoam.sh blockMesh -help shows why)"
 fi
+rm -rf "$tmp"
 
 # Python environment for the MCP servers.
 if have uv && uv run --quiet python -c 'import openfoam_mcp, validation_mcp, consultant_mcp, research_assistant_mcp' 2>/dev/null; then
@@ -58,14 +49,12 @@ fi
 
 # MPI only matters for parallel runs (decompose_par + n_procs > 1). The
 # workshop cases are serial, so this is a warning, not a failure.
-if [[ -f $OF_BASHRC ]]; then
-    if (set +u; source "$OF_BASHRC" >/dev/null 2>&1; timeout -s KILL 20 mpirun -np 1 true) >/dev/null 2>&1; then
-        pass "MPI starts (parallel runs available)"
-    else
-        note "mpirun hangs or fails here — serial runs are fine; parallel runs are not."
-        if grep -qi microsoft /proc/version 2>/dev/null; then
-            note "  (Seen on WSL2 hosts using networkingMode=mirrored in .wslconfig.)"
-        fi
+if bash -c "timeout -s KILL 30 scripts/with-openfoam.sh mpirun -np 1 true" >/dev/null 2>&1; then
+    pass "MPI starts (parallel runs available)"
+else
+    note "mpirun hangs or fails here — serial runs are fine; parallel runs are not."
+    if grep -qi microsoft /proc/version 2>/dev/null; then
+        note "  (Seen on WSL2 hosts using networkingMode=mirrored in .wslconfig.)"
     fi
 fi
 
