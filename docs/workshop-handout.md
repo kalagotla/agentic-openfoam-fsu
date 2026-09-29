@@ -14,7 +14,7 @@ https://github.com/kalagotla/agentic-openfoam
 
 You do **not** need Claude Code. The repo ships a 300-line Python harness that drives the servers via the Anthropic API or local Ollama; Claude Desktop, Cursor, Continue.dev, and Cline also work. See [`runtime-options.md`](runtime-options.md).
 
-Install in one of three ways: native (~5 min if OpenFOAM v2412 is already installed), Docker (~25 min one-time build), or VS Code Dev Container (~25 min one-time build). Commands in the README.
+Install with one command on WSL2 or Ubuntu: `./setup.sh` (OpenFOAM, the MCP servers, Claude Code, Kilo, Ollama and a local model; ~10–20 min). The hands-on steps are in [`workshop/README.md`](../workshop/README.md).
 
 ## Tool surface
 

@@ -7,9 +7,14 @@
 - **OpenFOAM-v2412** (ESI / OpenCFD release) — what the workshop targets and tests against
   - Earlier ESI releases (v2406+) and the `.org` Foundation OpenFOAM 11/12 should also work; the tool names in `tools.py` are the same. If you use a different version, update the `source` line and tutorial paths below.
 - Python 3.11+ via `uv`
-- VS Code on the Windows side with the WSL, Python, and Dev Containers extensions
+- VS Code on the Windows side with the WSL and Python extensions (optional)
 
 ## One-time setup
+
+> **Shortcut:** after step 1 (WSL2 + Ubuntu), clone the repo and run
+> `./setup.sh` — it performs steps 2–6 below, plus the agents and a local
+> model, and finishes with a health check. The manual steps stay here for
+> reference and for troubleshooting.
 
 ### 1. Enable WSL2 and install Ubuntu
 

@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+#
+# Health check for the workshop environment. Safe to run any time:
+#
+#     ./scripts/doctor.sh
+#
+# Exits non-zero if something the demos need is missing or broken.
+#
+set -uo pipefail
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$REPO_DIR"
+export PATH="$HOME/.local/bin:$PATH"
+OF_BASHRC=/usr/lib/openfoam/openfoam2412/etc/bashrc
+
+fails=0
+pass() { printf '  \033[1;32m✓\033[0m %s\n' "$*"; }
+fail() { printf '  \033[1;31m✗\033[0m %s\n' "$*"; fails=$((fails + 1)); }
+note() { printf '  \033[1;33m!\033[0m %s\n' "$*"; }
+have() { command -v "$1" >/dev/null 2>&1; }
+
+echo "agentic-openfoam doctor"
+
+# OpenFOAM: source it and mesh + solve a few steps of the cavity tutorial.
+if [[ -f $OF_BASHRC ]]; then
+    tmp=$(mktemp -d)
+    if (
+        set +u
+        # shellcheck disable=SC1090
+        source "$OF_BASHRC" >/dev/null 2>&1
+        cp -r "$FOAM_TUTORIALS/incompressible/icoFoam/cavity/cavity" "$tmp/c" &&
+            sed -i 's/^endTime .*/endTime 0.01;/' "$tmp/c/system/controlDict" &&
+            blockMesh -case "$tmp/c" >/dev/null 2>&1 &&
+            icoFoam -case "$tmp/c" >/dev/null 2>&1
+    ); then
+        pass "OpenFOAM v2412 meshes and solves (cavity tutorial)"
+    else
+        fail "OpenFOAM is installed but the cavity smoke test failed"
+    fi
+    rm -rf "$tmp"
+else
+    fail "OpenFOAM v2412 not found at $OF_BASHRC — run ./setup.sh"
+fi
+
+# Python environment for the MCP servers.
+if have uv && uv run --quiet python -c 'import openfoam_mcp, validation_mcp, consultant_mcp, research_assistant_mcp' 2>/dev/null; then
+    pass "MCP servers import (uv environment)"
+else
+    fail "MCP server environment broken — run: uv sync --all-packages"
+fi
+
+# ParaView for export_field_image.
+if have pvbatch && timeout 60 pvbatch --no-mpi --version >/dev/null 2>&1; then
+    pass "ParaView pvbatch (field renders)"
+else
+    note "pvbatch unavailable — field images will be skipped (the demos still run)"
+fi
+
+# MPI only matters for parallel runs (decompose_par + n_procs > 1). The
+# workshop cases are serial, so this is a warning, not a failure.
+if [[ -f $OF_BASHRC ]]; then
+    if (set +u; source "$OF_BASHRC" >/dev/null 2>&1; timeout -s KILL 20 mpirun -np 1 true) >/dev/null 2>&1; then
+        pass "MPI starts (parallel runs available)"
+    else
+        note "mpirun hangs or fails here — serial runs are fine; parallel runs are not."
+        if grep -qi microsoft /proc/version 2>/dev/null; then
+            note "  (Seen on WSL2 hosts using networkingMode=mirrored in .wslconfig.)"
+        fi
+    fi
+fi
+
+# Agents.
+have claude && pass "Claude Code: $(claude --version 2>/dev/null | head -1)" || note "Claude Code not installed"
+if have kilo; then
+    pass "Kilo CLI: $(kilo --version 2>/dev/null | tail -1)"
+    connected=$(timeout 120 kilo mcp list 2>/dev/null | grep -c "connected")
+    if [[ $connected -ge 4 ]]; then
+        pass "Kilo sees all 4 MCP servers"
+    else
+        fail "Kilo connected to $connected/4 MCP servers — run 'kilo mcp list' for details"
+    fi
+else
+    note "Kilo CLI not installed"
+fi
+
+# Local model.
+if have ollama; then
+    if curl -fsS "${OLLAMA_HOST:-http://localhost:11434}/api/version" >/dev/null 2>&1; then
+        if ollama show cfd-local >/dev/null 2>&1; then
+            pass "Ollama running; $("$REPO_DIR/scripts/local-model.sh" --show | head -1)"
+        else
+            fail "Ollama is running but the cfd-local model is missing — run ./scripts/local-model.sh"
+        fi
+    else
+        fail "Ollama is installed but not running — run ./scripts/local-model.sh (it starts the server)"
+    fi
+else
+    note "Ollama not installed (fine for a frontier-only setup)"
+fi
+
+echo
+if ((fails)); then
+    echo "$fails check(s) failed."
+    exit 1
+fi
+echo "All required checks passed."

@@ -2,21 +2,19 @@
 
 The four MCP servers are tool-agnostic. Any MCP-speaking client drives them.
 
-## Environment paths
+## Environment
 
-| Path | What you need | Time to first agent run |
-|---|---|---|
-| **A. Native** | OpenFOAM v2412 + git + uv | ~5 min repo setup if OF already installed |
-| **B. Docker** | Docker + the [Dockerfile](../Dockerfile) | ~30 min first build, seconds after |
-| **C. VS Code Dev Container** | VS Code + Dev Containers extension | ~30 min first build, instant after |
-
-All three converge on `scripts/run_agent.py` (or any GUI MCP client) once OpenFOAM is on the PATH. Native steps in the README; Docker steps in the [Dockerfile](../Dockerfile) header; Dev Container in [`.devcontainer/README.md`](../.devcontainer/README.md).
+One path: `./setup.sh` from the repo root on WSL2 or Ubuntu 22.04/24.04
+installs OpenFOAM v2412, the MCP servers' Python environment, Claude Code,
+the Kilo CLI, Ollama and a local model (see the README). Manual steps are
+in [`setup-wsl.md`](setup-wsl.md) if you would rather install by hand.
 
 ## Agent runtime matrix
 
 | Runtime | Cost | Local-only? | Tool-use quality | Setup |
 |---|---|---|---|---|
 | Claude Code | Pro/Max plan or API | No | Excellent | 1/5 |
+| Kilo CLI (`cfd` / `cfd-orchestrator` / `cfd-local` agents) | Free models, Kilo account, or your API key; local via Ollama | **Either** | Frontier: excellent; local: gpt-oss:20b reuses a corpus entry, struggles to discover from scratch | 1/5 (installed by `setup.sh`) |
 | Claude Code + LiteLLM proxy + Ollama | Free, local | **Yes** | gpt-oss:20b OK, frontier needed for hard cases | 3/5 |
 | GitHub Copilot CLI | Free tier; paid plans | No | Excellent (frontier models) | 1/5 |
 | Gemini CLI | Free tier; paid plans | No | Good–excellent | 1/5 |
@@ -125,8 +123,8 @@ All three then expose the same four servers and are driven with the same prompts
 ## Pick a path
 
 - **Smallest setup, see it work tonight:** Path A + harness + Anthropic API.
-- **No OpenFOAM yet:** Path B (Docker) + any runtime above.
-- **VS Code is home:** Path C (Dev Container) + Claude Code, Continue.dev, or Cline.
+- **No OpenFOAM yet:** `./setup.sh` installs it.
+- **VS Code is home:** open the WSL folder with the WSL extension (`code .`) + Claude Code, Continue.dev, or Cline.
 - **Air-gapped / ITAR:** Path A or B + Ollama + 30B-class tool-use model.
 
 ## Verify the wiring
@@ -151,5 +149,3 @@ The agent should call `validation.list_references` and report at least four data
 | Local model thrashes, never finishes lid-cavity | Model too small for long agentic workload | Move to `claude-opus-4-7` via Anthropic API for hard scenarios; keep local for smoke tests |
 | LiteLLM proxy: 401 / model not found | `ANTHROPIC_API_KEY` unset or model name not in `scripts/litellm_proxy.yaml` | `export ANTHROPIC_API_KEY=sk-anything`; add the model alias in the YAML |
 | `mcp` package import error | Top-level deps not synced | `uv sync` from the repo root |
-| Docker build fails on `apt-get` | Container network | Check Docker daemon network config, retry |
-| `docker build` fails on Windows (WSL / kernel / platform version error) | Docker Desktop needs a current WSL2 backend; a native-Windows checkout can also mangle line endings | Build from inside a WSL2 distro, cloning into the WSL2 filesystem (not `/mnt/c/...`); `wsl --update` and enable Docker Desktop's WSL integration |
