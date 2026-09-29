@@ -237,6 +237,9 @@ install_node_userspace() {
     curl -fsSL "https://nodejs.org/dist/latest-v${NODE_MAJOR}.x/$ver" \
         | tar -xJ -C "$HOME/.local/node" --strip-components=1 || die "Node.js download failed."
     ln -sf "$HOME/.local/node/bin/"{node,npm,npx} "$HOME/.local/bin/"
+    # Global packages (the Kilo CLI) must land in ~/.local/bin, which is on
+    # PATH, not in ~/.local/node/bin, which is not.
+    "$HOME/.local/bin/npm" config set prefix "$HOME/.local"
     hash -r
 }
 if ($WANT_CLAUDE || $WANT_KILO) && ! node_ok; then
@@ -297,7 +300,7 @@ if $WANT_LOCAL; then
             curl -fsSL https://ollama.com/install.sh | quiet sh || die "Ollama install failed."
         fi
     fi
-    ok "Ollama $(ollama --version 2>/dev/null | awk '{print $NF}')"
+    ok "Ollama $(ollama --version 2>/dev/null | tail -1 | awk '{print $NF}')"
     # local-model.sh starts the server if needed, picks + pulls the model,
     # and creates the `cfd-local` alias the Kilo agents use.
     "$REPO_DIR/scripts/local-model.sh" ${MODEL:+"$MODEL"} || die "Local model setup failed."
