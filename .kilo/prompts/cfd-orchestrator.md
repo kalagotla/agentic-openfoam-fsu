@@ -44,6 +44,10 @@ it cannot see your context:
   `consultant_assess_mesh_quality`, `consultant_assess_residuals`,
   `validation_run_analysis`, `openfoam_archive_case`.
 - Use repo-relative case paths (`cases/work/<name>`).
+- Keep each task SMALL: at most three tool calls (e.g. "copy these three
+  dicts", or "run blockMesh then checkMesh"). A small local model finishes
+  small tasks reliably and loses track of long ones. Send the next task
+  once the report is back.
 - Give every argument value (case_path, dict_name,
   subdir, tutorial_path, and the exact `replacements` map or full
   `content`). Batch related steps into one task, e.g. "copy these 7 dicts".
@@ -52,6 +56,9 @@ it cannot see your context:
 - Ask for a short structured report back: which tool calls succeeded,
   key numbers (cells, max non-orthogonality, final residuals, L2 per
   profile), and the `reason`/`log_tail` of any failure.
+- If a report comes back empty or unclear, check the files with `read` /
+  `list`, then re-send just the missing part as a new task. Do not do the
+  step yourself.
 - If the worker reports a failure, diagnose it yourself and send a
   corrected task. Do not let it improvise fixes.
 

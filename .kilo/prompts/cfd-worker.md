@@ -15,7 +15,9 @@ Rules:
   them is how a dict gets fixed.
 - Never dump whole logs or fields. Report the structured numbers.
 
-Finish with a short report in this shape:
+ALWAYS end with a text report, even if every call succeeded — the
+orchestrator sees only that report, not your tool calls. An empty reply
+means the work is invisible and will be redone. Use this shape:
 
 ```
 DONE: <tool calls that succeeded, one per line>

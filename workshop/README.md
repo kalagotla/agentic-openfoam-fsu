@@ -28,6 +28,9 @@ cd agentic-openfoam
 ./setup.sh
 ```
 
+**On the FSU cluster** instead of a laptop: same clone and `./setup.sh`,
+from an interactive compute node — see [`hpc.md`](hpc.md).
+
 `setup.sh` installs OpenFOAM v2412, the Python environment, Claude Code,
 the Kilo CLI, Ollama, and a local model sized to your machine, then runs a
 health check. It takes 10–20 minutes, most of it downloads. Re-running it
@@ -155,6 +158,12 @@ running the analysis) goes to the `cfd-worker` subagent, which runs on
 your local model. Kilo shows each delegated task and its report inline.
 The long tool outputs stay on your machine, and the frontier model only
 sees the summaries.
+
+The split holds best with a strong frontier model (Claude, GPT, Gemini
+Pro). Weaker free models sometimes lose patience and do a step
+themselves. You'll see a `openfoam_*` call in the orchestrator's own
+column instead of a delegated task. That's worth pointing out, not a
+failure.
 
 ### Loop C — local only (Kilo)
 

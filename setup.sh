@@ -29,9 +29,10 @@
 #   --hpc           force HPC mode (no sudo, Apptainer for OpenFOAM)
 #   -h, --help      show this help
 #
-# HPC environment knobs (optional):
-#   AOF_OPENFOAM_SIF   use an existing OpenFOAM v2412 image instead of building one
-#   OLLAMA_MODELS      where Ollama stores model weights (default ~/.ollama/models)
+# HPC: OpenFOAM v2412 ships as one portable Apptainer image (.sif). setup.sh
+# uses, in order: $AOF_OPENFOAM_SIF, the shared path / URL in
+# workshop/hpc-site.env, a copy already in .hpc/, or builds one (compute
+# node only). Model weights go to $OLLAMA_MODELS (default ~/.ollama/models).
 #
 set -euo pipefail
 
@@ -153,27 +154,47 @@ install_workstation_base() {
 
 install_hpc_base() {
     step 1/6 "Cluster tools"
+    case "$(hostname)" in
+        *login*) die "This is a login node ($(hostname)). Run setup on a compute node — see workshop/hpc.md §1 (srun ... --pty bash -l)." ;;
+    esac
     local t
     for t in git curl tar zstd; do have "$t" || die "$t is not available on this cluster node."; done
-    ok "git, curl, tar, zstd"
+    ok "git, curl, tar, zstd on $(hostname)"
     say "ParaView renders are skipped on HPC (export_field_image reports pvbatch_not_found); the demos do not need them."
 
-    step 2/6 "OpenFOAM v${OF_VERSION} (Apptainer image)"
-    local sif=${AOF_OPENFOAM_SIF:-$REPO_DIR/.hpc/openfoam-v${OF_VERSION}.sif}
-    if [[ -f $sif ]]; then
+    step 2/6 "OpenFOAM v${OF_VERSION} (portable Apptainer image)"
+    # Site defaults (shared image path / download URL) for this cluster.
+    # shellcheck disable=SC1091
+    [[ -f $REPO_DIR/workshop/hpc-site.env ]] && source "$REPO_DIR/workshop/hpc-site.env"
+    local sif=$REPO_DIR/.hpc/openfoam-v${OF_VERSION}.sif
+    if [[ -n ${AOF_OPENFOAM_SIF:-} && -f $AOF_OPENFOAM_SIF ]]; then
+        sif=$AOF_OPENFOAM_SIF
+        ok "shared image $sif"
+    elif [[ -f $sif ]]; then
         ok "image present ($sif)"
+    elif [[ -n ${AOF_OPENFOAM_SIF_URL:-} ]]; then
+        mkdir -p "$REPO_DIR/.hpc"
+        say "Downloading the portable image (~1 GB) from $AOF_OPENFOAM_SIF_URL…"
+        curl -fL --retry 3 -o "$sif.part" "$AOF_OPENFOAM_SIF_URL" && mv "$sif.part" "$sif" \
+            || die "Image download failed."
+        ok "downloaded $sif"
     else
         mkdir -p "$REPO_DIR/.hpc"
         export APPTAINER_CACHEDIR="$REPO_DIR/.hpc/cache" APPTAINER_TMPDIR="$REPO_DIR/.hpc/tmp"
         mkdir -p "$APPTAINER_TMPDIR"
-        say "Building $sif from $OF_IMAGE (~1 GB, 5–15 min)…"
-        # Cap mksquashfs: login nodes kill it for memory otherwise.
-        quiet apptainer build --mksquashfs-args "-mem 1G -processors 2" "$sif" "$OF_IMAGE" \
-            || die "Apptainer build failed. An instructor-provided image works too: export AOF_OPENFOAM_SIF=/path/to/openfoam-v${OF_VERSION}.sif and re-run."
-        rm -rf "$APPTAINER_TMPDIR"
+        say "No shared image configured — building $sif from $OF_IMAGE (~1 GB, 5–15 min)…"
+        quiet apptainer build "$sif" "$OF_IMAGE" \
+            || die "Apptainer build failed. Point AOF_OPENFOAM_SIF at an existing openfoam-v${OF_VERSION}.sif and re-run."
+        rm -rf "$APPTAINER_TMPDIR" "$APPTAINER_CACHEDIR"
         ok "built $sif"
     fi
-    [[ -n ${AOF_OPENFOAM_SIF:-} ]] && say "Using AOF_OPENFOAM_SIF — add 'export AOF_OPENFOAM_SIF=$sif' to ~/.bashrc so the agents find it."
+    export AOF_OPENFOAM_SIF=$sif
+    # The MCP servers are launched by the agents, not this shell — make the
+    # image path permanent for them.
+    if ! grep -qF "AOF_OPENFOAM_SIF=" "$HOME/.bashrc" 2>/dev/null; then
+        echo "export AOF_OPENFOAM_SIF=$sif   # agentic-openfoam: portable OpenFOAM v${OF_VERSION}" >>"$HOME/.bashrc"
+        say "Added AOF_OPENFOAM_SIF to ~/.bashrc"
+    fi
     scripts/with-openfoam.sh blockMesh -help >/dev/null 2>&1 || die "OpenFOAM in the image does not run (scripts/with-openfoam.sh blockMesh -help)."
     ok "OpenFOAM runs through scripts/with-openfoam.sh"
 }
