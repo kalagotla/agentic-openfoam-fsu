@@ -6,9 +6,9 @@ The four MCP servers are tool-agnostic. Any MCP-speaking client drives them.
 
 | Path | What you need | Time to first agent run |
 |---|---|---|
-| **A. Native** | OpenFOAM v2412 + git + uv | ~5 min if OF already installed |
-| **B. Docker** | Docker + the [Dockerfile](../Dockerfile) | ~25 min build, ~5 min after |
-| **C. VS Code Dev Container** | VS Code + Dev Containers extension | ~25 min first build, instant after |
+| **A. Native** | OpenFOAM v2412 + git + uv | ~5 min repo setup if OF already installed |
+| **B. Docker** | Docker + the [Dockerfile](../Dockerfile) | ~30 min first build, seconds after |
+| **C. VS Code Dev Container** | VS Code + Dev Containers extension | ~30 min first build, instant after |
 
 All three converge on `scripts/run_agent.py` (or any GUI MCP client) once OpenFOAM is on the PATH. Native steps in the README; Docker steps in the [Dockerfile](../Dockerfile) header; Dev Container in [`.devcontainer/README.md`](../.devcontainer/README.md).
 
@@ -16,8 +16,11 @@ All three converge on `scripts/run_agent.py` (or any GUI MCP client) once OpenFO
 
 | Runtime | Cost | Local-only? | Tool-use quality | Setup |
 |---|---|---|---|---|
-| Claude Code | $20/mo | No | Excellent | 1/5 |
+| Claude Code | Pro/Max plan or API | No | Excellent | 1/5 |
 | Claude Code + LiteLLM proxy + Ollama | Free, local | **Yes** | gpt-oss:20b OK, frontier needed for hard cases | 3/5 |
+| GitHub Copilot CLI | Free tier; paid plans | No | Excellent (frontier models) | 1/5 |
+| Gemini CLI | Free tier; paid plans | No | Good–excellent | 1/5 |
+| OpenAI Codex CLI | ChatGPT plan or API | No | Excellent | 2/5 |
 | Claude Desktop | Free with Claude.ai | No | Excellent | 2/5 |
 | Cursor | $20/mo | No | Excellent | 2/5 |
 | Continue.dev (VS Code) | Free | Either | Good with frontier models | 3/5 |
@@ -38,9 +41,10 @@ runtime, because it's enforced by two shared mechanisms over one policy
   tools.
 - **The harness (`scripts/run_agent.py`, both Anthropic and Ollama)** —
   the dispatch loop prompts on stdin before a gated tool. Hard gate.
-- **Other MCP clients (Claude Desktop, Cursor, Continue.dev, Cline)** —
-  no hook runs, so the level is **advisory**: the agent honors it via the
-  CLAUDE.md behavioral rules, but nothing forces the pause.
+- **Other MCP clients (GitHub Copilot CLI, Gemini CLI, Codex, Claude Desktop,
+  Cursor, Continue.dev, Cline)** — no hook runs, so the level is **advisory**:
+  the agent honors it via the CLAUDE.md behavioral rules, but nothing forces
+  the pause.
 
 ## 1. Bare harness + Anthropic API
 
@@ -107,6 +111,16 @@ MCP support in Claude Desktop evolves quickly; current canonical setup at <https
 ## 4. Continue.dev / Cline
 
 Install from the VS Code Marketplace. Both register MCP servers from a config file (`.continue/config.yaml` for Continue.dev; see <https://docs.cline.bot/mcp-servers> for Cline). Point them at this repo's `.mcp.json`. Both expose the same tool surface as Claude Code — only the IDE chrome differs.
+
+## 5. GitHub Copilot CLI / Gemini CLI / Codex
+
+These CLIs speak MCP too, but each keeps its own server registry rather than reading this repo's `.mcp.json` — copy the four `command` / `args` entries from [`.mcp.json`](../.mcp.json) into the client's config:
+
+- **GitHub Copilot CLI** (`copilot`) — `/mcp add` inside the session, or edit its MCP config file. Steps: <https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers>. Free tier with a GitHub login, so it's the no-API-key option for attendees.
+- **Gemini CLI** (`gemini`) — `gemini mcp add <name> <command> [args…]`, or the `mcpServers` block in `~/.gemini/settings.json`. Steps: <https://github.com/google-gemini/gemini-cli>.
+- **OpenAI Codex CLI** (`codex`) — an `[mcp_servers.<name>]` table in `~/.codex/config.toml`. Steps: <https://github.com/openai/codex>.
+
+All three then expose the same four servers and are driven with the same prompts as the harness.
 
 ## Pick a path
 

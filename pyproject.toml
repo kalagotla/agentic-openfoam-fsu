@@ -38,6 +38,7 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.6",
     "mypy>=1.11",
+    "types-PyYAML>=6.0",
 ]
 
 [tool.ruff]
@@ -59,6 +60,7 @@ minversion = "8.0"
 # common conftest without colliding on shared module names.
 addopts = "-ra -q --import-mode=importlib"
 testpaths = [
+    "scripts/eval/tests",
     "servers/openfoam/tests",
     "servers/validation/tests",
     "servers/consultant/tests",

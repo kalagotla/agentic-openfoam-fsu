@@ -93,3 +93,7 @@ badFaces
 illegalFaces
 *_normal_*.obj
 *.vtp
+
+# Evaluation runs: one directory per run (case, logs, record.json). Only the
+# aggregated tables are committed, never the raw matrix output.
+scripts/eval/results/
