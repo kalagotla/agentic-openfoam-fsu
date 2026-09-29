@@ -29,6 +29,12 @@ if [[ -f $SIF ]] && command -v apptainer >/dev/null 2>&1; then
     binds=()
     # Home is bound by default; cluster file systems usually are not.
     for d in /gpfs /scratch /work; do [[ -d $d ]] && binds+=(--bind "$d"); done
+    # Apptainer swaps in the image's PATH; keep the host's user-space tools
+    # (uv, the command's own directory) reachable inside it.
+    extra="$HOME/.local/bin"
+    cmd_path=$(command -v "$1" 2>/dev/null || true)
+    [[ $cmd_path == /* ]] && extra="$(dirname "$cmd_path"):$extra"
+    export APPTAINERENV_PREPEND_PATH="$extra"
     exec apptainer exec "${binds[@]}" "$SIF" \
         bash -c 'source '"$OF_BASHRC"' >/dev/null 2>&1; exec "$@"' bash "$@"
 fi
