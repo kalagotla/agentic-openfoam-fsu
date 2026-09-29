@@ -89,6 +89,11 @@ cd agentic-openfoam
 | Agents | Claude Code (`claude`) and the Kilo CLI (`kilo`) |
 | Local model | Ollama plus a model chosen for your GPU/RAM, exposed to the agents as `cfd-local` |
 
+**On an HPC cluster** (FSU RCC) the same command runs without sudo:
+OpenFOAM v2412 comes from one shared portable Apptainer image, and the
+agents and Ollama unpack under `~/.local`. See
+[`workshop/hpc.md`](workshop/hpc.md).
+
 It ends with `./scripts/doctor.sh`, which meshes and solves a tutorial,
 checks that Kilo sees all four MCP servers, and checks the local model.
 Options: `--model <ollama-tag>`, `--no-local`, `--no-claude`, `--no-kilo`.

@@ -30,7 +30,7 @@ up by **login** shells (`bash -l`). The agents need it (frontier models,
 srun -A genacc_q -p genacc_q -c 8 --mem=32G -t 3:00:00 --pty bash -l
 
 # GPU node (local model on GPU):
-srun -A gpu_q -p gpu_q --gres=gpu:1 -c 8 --mem=32G -t 3:00:00 --pty bash -l
+srun -A backfill2 -p backfill2 --gres=gpu:1 -c 8 --mem=48G -t 3:00:00 --pty bash -l
 ```
 
 Use the partition and account your instructor gives you (a workshop
@@ -49,15 +49,10 @@ cd agentic-openfoam
 ./setup.sh
 ```
 
-The first run builds the OpenFOAM image (~1 GB, 5–15 min) unless your
-instructor has already built one. Then point at it and skip the build:
-
-```bash
-export AOF_OPENFOAM_SIF=/gpfs/research/<shared>/openfoam-v2412.sif
-./setup.sh
-```
-
-(add the `export` to `~/.bashrc` so the agents find it in every session).
+OpenFOAM comes from the shared portable image named in
+`workshop/hpc-site.env` (no per-person build). To use a different copy,
+`export AOF_OPENFOAM_SIF=/path/to/openfoam-v2412.sif` before `./setup.sh`.
+Setup records the path in `~/.bashrc` so the agents find it every session.
 
 Model weights are large (`gpt-oss:20b` is 13 GB). To keep them out of your
 home quota, point Ollama at research storage before `setup.sh`:
@@ -83,12 +78,31 @@ Then continue exactly as in [`README.md`](README.md) §2 (`claude`, `kilo`,
 
 ## Cluster notes
 
-- **GPUs.** The GTX 1080 Ti nodes (11 GB each) run `gpt-oss:20b` split across
-  two cards; request `--gres=gpu:2`. On one card, `setup.sh` picks a smaller
-  model (or pass `--model qwen3:8b`).
+- **Local models need a GPU node.** On CPU the ~18k-token agent prompt
+  alone takes many minutes to read (measured: 20+ min on an `ame_q` node),
+  so on a CPU node use the frontier loop (A) only. A 24 GB card (e.g. the
+  ada4500s in `backfill2`) holds `gpt-oss:20b`; request `--gres=gpu:1`.
+- **Threads.** `scripts/local-model.sh` limits Ollama to your job's CPU
+  count. Without that it spreads across the whole shared node.
 - **Signing in to Claude Code** on a node prints a URL; open it on your
   laptop and paste the code back.
-- **Solver runs** happen inside your interactive job, on its cores. Keep
-  `-c` at 8 or more for the snappyHexMesh scenarios.
-- **Parallel runs** (`decompose_par` + `n_procs > 1`) use the image's MPI
-  within the node.
+- **Solver runs** happen inside your interactive job, on its cores.
+- **Where it was checked** (Sept 2026, `ame_q` node): `setup.sh` in HPC
+  mode end to end, the shared image running OpenFOAM v2412 including
+  `mpirun`, and Kilo connecting all four MCP servers through the image.
+
+## For instructors: the portable OpenFOAM image
+
+OpenFOAM v2412 ships to the class as one read-only file. Build it once,
+on a compute node:
+
+```bash
+srun -A ame_q -p ame_q -c 16 --mem=64G -t 1:00:00 --pty bash -l
+scripts/build-openfoam-sif.sh /gpfs/research/<group>/agentic-openfoam-shared
+```
+
+That writes `openfoam-v2412.sif` (455 MB), world-readable, in about 10
+minutes. Point `workshop/hpc-site.env` at it. Every attendee's
+`setup.sh` then uses it directly, with no per-person build. The same file can be
+attached to a GitHub release (set `AOF_OPENFOAM_SIF_URL`) for clusters
+that cannot see your storage.

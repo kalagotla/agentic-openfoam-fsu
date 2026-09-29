@@ -180,16 +180,23 @@ Set up and run cases/scenarios/lid-cavity-re1000.yaml
 
 Run this **after** Step 1 has been promoted, so the local model inherits
 the entry. That is the point: a frontier model discovered the setup once,
-and a model small enough to run offline reuses it. Local models are
-slower and clumsier with tools. If one stops mid-way, reply `continue`.
+and a model small enough to run offline looks it up and applies it.
+
+Be clear with the room about what to expect. In our rehearsals
+`gpt-oss:20b` found and used the corpus entry every time. But it does not
+finish the whole case unattended. It ends its turn early or hand-writes a
+dict with a syntax error, and `qwen3:30b` and `gpt-oss:120b` behaved the
+same. Drive it: when it stops, reply `continue`, or tell it the next step
+("now run blockMesh"). The contrast with Loop B, where the same local
+model finishes reliably given one small task at a time, is the lesson.
 
 ### A suggested session
 
 | Time | Who drives | What |
 |---|---|---|
 | 15 min | Loop A, Claude Code | Step 1 — discover at Re = 400, promote the entry |
-| 10 min | Loop C, local only | Step 2 — local model reuses the entry at Re = 1000 |
-| 15 min | Loop B, frontier + local | Step 2 again, split across two models; compare REPORT.md |
+| 15 min | Loop B, frontier + local | Step 2 — frontier plans, local model runs mesh/solve; compare REPORT.md |
+| 10 min | Loop C, local only | Step 2 again — local model finds the entry; you nudge it along |
 | — | `reset-all` | start over, or try Step 1 local-only to see what the corpus saved you |
 
 ## 3. When things go wrong
