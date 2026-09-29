@@ -36,6 +36,18 @@ gpu_vram_gb() {
 }
 ram_gb() { awk '/MemTotal/ {printf "%d", $2/1024/1024}' /proc/meminfo; }
 
+# CPU threads this job may use. On a shared cluster node Ollama would
+# otherwise start one thread per core on the whole node, far past the
+# Slurm allocation. Empty = let Ollama decide (laptops, workstations).
+job_cpus() {
+    if [[ -n ${SLURM_CPUS_PER_TASK:-} ]]; then echo "$SLURM_CPUS_PER_TASK"; return; fi
+    if [[ -n ${SLURM_CPUS_ON_NODE:-} ]]; then echo "$SLURM_CPUS_ON_NODE"; return; fi
+    # Reached the node over plain ssh (VS Code Remote): ask Slurm for our job here.
+    if command -v squeue >/dev/null 2>&1; then
+        squeue -h -u "$USER" -w "$(hostname -s)" -t R -o %C 2>/dev/null | sort -n | tail -1
+    fi
+}
+
 # Tiers. gpt-oss:20b was the strongest local model in docs/evaluation-results.md
 # and is an MoE (~3.6B active), so it is usable even partly on CPU.
 choose_model() {
@@ -94,7 +106,10 @@ MODEL=${1:-$(choose_model "$VRAM" "$RAM")}
 CTX=${CFD_LOCAL_CTX:-$(choose_ctx "$VRAM" "$RAM")}
 
 say "Hardware: GPU ${VRAM} GB VRAM, ${RAM} GB RAM -> model ${MODEL}, context ${CTX}"
-(( VRAM == 0 )) && warn "No NVIDIA GPU visible — the local model runs on CPU (slow but works)."
+if (( VRAM == 0 )); then
+    warn "No NVIDIA GPU visible — the local model runs on CPU. Fine for short tasks; a full"
+    warn "agent run needs a GPU (the ~18k-token agent prompt alone takes many minutes on CPU)."
+fi
 [[ $MODEL == qwen3:4b ]] && warn "Small machine: qwen3:4b can drive short tasks, but the full local-only run is unlikely to finish cleanly. The frontier + local loop is the better demo here."
 
 ensure_ollama
@@ -109,6 +124,11 @@ fi
 say "Creating alias $ALIAS -> $MODEL (num_ctx $CTX)…"
 tmp=$(mktemp)
 printf 'FROM %s\nPARAMETER num_ctx %s\n' "$MODEL" "$CTX" >"$tmp"
+THREADS=$(job_cpus)
+if [[ -n $THREADS ]]; then
+    printf 'PARAMETER num_thread %s\n' "$THREADS" >>"$tmp"
+    say "Limiting the model to the job's $THREADS CPU threads."
+fi
 ollama create "$ALIAS" -f "$tmp" >/dev/null 2>&1 || die "ollama create failed"
 rm -f "$tmp"
 

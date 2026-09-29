@@ -407,6 +407,14 @@ class TestReadAnnotation:
         with pytest.raises(AnnotationNotFoundError):
             read_annotation("nonexistent/case")
 
+    def test_directory_form_resolves_to_nested_case(
+        self, fixture_annotations_root: Path
+    ) -> None:
+        # Agents pass the tutorial directory; the case nests under the same name.
+        ann = read_annotation("incompressible/icoFoam/cavity")
+        assert ann.metadata["solver"] == "icoFoam"
+        assert ann.tutorial_path == "incompressible/icoFoam/cavity/cavity"
+
     def test_no_frontmatter(self, fixture_annotations_root: Path) -> None:
         with pytest.raises(ValueError, match="missing YAML frontmatter"):
             read_annotation("broken/noframe")

@@ -8,6 +8,7 @@ as a failure, and reading an unscoreable artefact as a pass.
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -55,9 +56,20 @@ def test_live_run_is_detected(case: Path) -> None:
     assert detect_run_kind(case) == "live"
 
 
+def _tracked(path: Path) -> bool:
+    # In the workshop repo this directory is written by an attendee's own
+    # Step 1 run (end_of_run.archive_case), so only a committed, curated
+    # baseline has contents this test can pin.
+    r = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", str(path / "REPORT.md")],
+        cwd=REPO_ROOT, capture_output=True,
+    )
+    return r.returncode == 0
+
+
 def test_archive_reports_setup_as_unmeasured_not_failed() -> None:
-    if not ARCHIVED_CASE.is_dir():
-        pytest.skip("archived baseline not present")
+    if not ARCHIVED_CASE.is_dir() or not _tracked(ARCHIVED_CASE):
+        pytest.skip("no committed archived baseline")
     record = score_case(ARCHIVED_CASE)
     assert record["run"]["run_kind"] == "archive"
     # The mesh is skipped by archive_case on purpose. Reporting False here
