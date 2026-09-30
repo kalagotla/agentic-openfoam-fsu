@@ -95,7 +95,7 @@ of2412
 uv run pytest servers/
 ```
 
-Expect ~233 passed plus a handful of skips when OpenFOAM isn't on PATH. With `of2412` sourced, the skips drop and the full count passes.
+Expect everything to pass, with a handful of skips when OpenFOAM isn't on PATH. With `of2412` sourced, the OpenFOAM-dependent skips run too.
 
 ## Connecting VS Code on Windows to WSL
 

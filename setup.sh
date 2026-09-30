@@ -172,21 +172,27 @@ install_hpc_base() {
         ok "shared image $sif"
     elif [[ -f $sif ]]; then
         ok "image present ($sif)"
-    elif [[ -n ${AOF_OPENFOAM_SIF_URL:-} ]]; then
-        mkdir -p "$REPO_DIR/.hpc"
-        say "Downloading the portable image (~1 GB) from $AOF_OPENFOAM_SIF_URL…"
-        curl -fL --retry 3 -o "$sif.part" "$AOF_OPENFOAM_SIF_URL" && mv "$sif.part" "$sif" \
-            || die "Image download failed."
-        ok "downloaded $sif"
     else
         mkdir -p "$REPO_DIR/.hpc"
-        export APPTAINER_CACHEDIR="$REPO_DIR/.hpc/cache" APPTAINER_TMPDIR="$REPO_DIR/.hpc/tmp"
-        mkdir -p "$APPTAINER_TMPDIR"
-        say "No shared image configured — building $sif from $OF_IMAGE (~1 GB, 5–15 min)…"
-        quiet apptainer build "$sif" "$OF_IMAGE" \
-            || die "Apptainer build failed. Point AOF_OPENFOAM_SIF at an existing openfoam-v${OF_VERSION}.sif and re-run."
-        rm -rf "$APPTAINER_TMPDIR" "$APPTAINER_CACHEDIR"
-        ok "built $sif"
+        if [[ -n ${AOF_OPENFOAM_SIF_URL:-} ]]; then
+            say "Downloading the portable image (455 MB) from $AOF_OPENFOAM_SIF_URL…"
+            if curl -fL --retry 3 -o "$sif.part" "$AOF_OPENFOAM_SIF_URL" >>"$LOG" 2>&1; then
+                mv "$sif.part" "$sif"
+                ok "downloaded $sif"
+            else
+                rm -f "$sif.part"
+                warn "Download failed (a private repo's release needs a login); building instead."
+            fi
+        fi
+        if [[ ! -f $sif ]]; then
+            export APPTAINER_CACHEDIR="$REPO_DIR/.hpc/cache" APPTAINER_TMPDIR="$REPO_DIR/.hpc/tmp"
+            mkdir -p "$APPTAINER_TMPDIR"
+            say "Building $sif from $OF_IMAGE (~10 min)…"
+            quiet apptainer build "$sif" "$OF_IMAGE" \
+                || die "Apptainer build failed. Point AOF_OPENFOAM_SIF at an existing openfoam-v${OF_VERSION}.sif and re-run."
+            rm -rf "$APPTAINER_TMPDIR" "$APPTAINER_CACHEDIR"
+            ok "built $sif"
+        fi
     fi
     export AOF_OPENFOAM_SIF=$sif
     # The MCP servers are launched by the agents, not this shell — make the

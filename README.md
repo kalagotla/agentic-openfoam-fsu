@@ -156,7 +156,7 @@ Matrix in [`docs/runtime-options.md`](docs/runtime-options.md).
 
 ### Claude Code settings
 
-`.claude/settings.json` is tracked and carries the project's shared Claude Code configuration, so a fresh clone is ready to run: it enables the four `.mcp.json` servers (`enabledMcpjsonServers`), pre-approves the case-authoring tool calls and `python3` invocations the workflow needs (`permissions.allow`), and registers the automation-gate `PreToolUse` hook that enforces each scenario's `automation_level`. `.claude/settings.local.json` is gitignored and holds your own per-machine overrides — it layers on top of the shared file and is never committed.
+`.claude/settings.json` is tracked and carries the project's shared Claude Code configuration, so a fresh clone is ready to run: it enables the four `.mcp.json` servers (`enabledMcpjsonServers`), pre-approves every tool on those four servers plus the `python3` invocations the workflow needs (`permissions.allow`), and registers the automation-gate `PreToolUse` hook that enforces each scenario's `automation_level`. The hook's pauses apply even to pre-approved tools, so the scenario, not the allow-list, decides where a run stops for review. Claude Code applies all of this only after you accept its "trust this folder" prompt the first time you run `claude` in the repo. `.claude/settings.local.json` is gitignored and holds your own per-machine overrides — it layers on top of the shared file and is never committed.
 
 ## Shipped scenarios
 

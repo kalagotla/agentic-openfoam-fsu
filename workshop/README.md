@@ -43,7 +43,7 @@ Open a **new** terminal afterwards so the PATH changes apply.
 
 | Agent | How to sign in |
 |---|---|
-| Claude Code | run `claude` once; sign in with a Claude Pro/Max account or an API key |
+| Claude Code | run `claude` once in the repo; sign in with a Claude Pro/Max account or an API key, and **accept the "trust this folder" prompt** (until you do, the repo's MCP servers and pre-approved tools stay off) |
 | Kilo (frontier models) | nothing needed for the free models (`kilo/kilo-auto/free` and the `:free` list in `/models`); `kilo auth login` for a Kilo account, or `export ANTHROPIC_API_KEY=...` to use your own key |
 | Kilo (local model) | nothing — it talks to Ollama on your machine |
 

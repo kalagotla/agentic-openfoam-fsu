@@ -1,6 +1,6 @@
 # Scenario: backward-facing step matching the Armaly 1983 experimental rig.
 #
-# An example scenario (Demo 1 is now the lid-cavity / Ghia case; see
+# An example scenario (the workshop demo is the lid-cavity / Ghia case; see
 # cases/scenarios/lid-cavity.yaml). The agent should author this from
 # scratch (browse $FOAM_TUTORIALS/incompressible/simpleFoam/pitzDaily for
 # structural patterns), generate the case in cases/work/pitz-daily/,

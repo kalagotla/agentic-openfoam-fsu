@@ -78,6 +78,10 @@ Then continue exactly as in [`README.md`](README.md) §2 (`claude`, `kilo`,
 
 ## Cluster notes
 
+- **No `of2412` on the cluster.** Where a doc says `of2412`, prefix the
+  command instead: `scripts/with-openfoam.sh blockMesh -help`, or open a
+  shell with OpenFOAM loaded: `scripts/with-openfoam.sh bash`.
+
 - **Local models need a GPU node.** On CPU the ~18k-token agent prompt
   alone takes many minutes to read (measured: 20+ min on an `ame_q` node),
   so on a CPU node use the frontier loop (A) only. A 24 GB card (e.g. the

@@ -43,9 +43,11 @@ jobs:
           skipped = int(suite.get("skipped", 0))
           total = int(suite.get("tests", 0))
           print(f"{total} tests, {skipped} skipped")
-          # 12 environment-dependent tests skip without OpenFOAM installed, plus 2
-          # that need the cavity corpus entry the workshop demo earns live.
-          assert skipped <= 14, f"{skipped} skipped, expected at most 14"
+          # 12 environment-dependent tests skip without OpenFOAM installed, 2
+          # need the cavity corpus entry the workshop demo earns live, and 1
+          # needs a committed archived lid-cavity baseline (an attendee's
+          # Step 1 run writes it; the repo does not ship one).
+          assert skipped <= 15, f"{skipped} skipped, expected at most 15"
           PY
 
       - name: Lint the evaluation harness
