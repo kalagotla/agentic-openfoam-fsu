@@ -199,6 +199,15 @@ model finishes reliably given one small task at a time, is the lesson.
 | 10 min | Loop C, local only | Step 2 again — local model finds the entry; you nudge it along |
 | — | `reset-all` | start over, or try Step 1 local-only to see what the corpus saved you |
 
+### What the rehearsals looked like (Sept 2026)
+
+| Run | Model(s) | Result | Time | Cost |
+|---|---|---|---|---|
+| Step 1, Loop A | Claude Code (Opus) | coarse miss → grid study to 80×80, both profiles in tolerance; 13 decisions, 4 retries; draft entry written | 6 min | $2.45 |
+| Step 2, Loop A | Claude Code (Opus), entry promoted | cited the entry 14×, **0 retries**, PASS on 160×160 (u L2 0.003, v L2 0.006) | 4.5 min | $1.80 |
+| Step 1, Loop B | free Kilo model + local gpt-oss:20b | PASS (u L2 0.0045, v L2 0.035); local worker ran mesh/solve | 17 min | free |
+| Step 2, Loop C | gpt-oss:20b alone | found and applied the entry; stopped before solving without nudges | — | free |
+
 ## 3. When things go wrong
 
 | Symptom | Fix |
