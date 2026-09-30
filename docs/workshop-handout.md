@@ -1,20 +1,33 @@
 # Accelerating CFD Simulations with Agentic AI and OpenFOAM
 
-AIAA Aviation 2026 • San Diego • 8–12 June • 90-minute session
+FSU DC-QC workshop edition • first given at AIAA Aviation 2026 (San Diego)
 
-## What you saw
+## What you did
 
-A live CFD workflow driven by an AI agent through four MCP servers, validated against Ghia, Ghia & Shin (1982) at Re=400. The agent picked a structural template from `$FOAM_TUTORIALS`, cited the tutorial annotation, generated a mesh, ran simpleFoam, sampled centerline profiles, and compared to Ghia — within a 5 % L2 tolerance band. The same servers also run under a local Ollama model for ITAR-sensitive workflows.
+Drove a CFD workflow with an AI agent through four MCP servers: set up,
+meshed, solved, and validated a 2-D lid-driven cavity against Ghia, Ghia &
+Shin (1982), with every decision narrated to `REPORT.md`. Then you ran it
+twice. The first run (Re = 400) earned a corpus entry and the second
+(Re = 1000) reused it. You drove it three ways: a frontier model alone, a
+frontier model directing a local one, and a local model alone.
 
 ## Take it home
 
 ```
-https://github.com/kalagotla/agentic-openfoam
+https://github.com/kalagotla/agentic-openfoam-fsu
 ```
 
-You do **not** need Claude Code. The repo ships a 300-line Python harness that drives the servers via the Anthropic API or local Ollama; Claude Desktop, Cursor, Continue.dev, and Cline also work. See [`runtime-options.md`](runtime-options.md).
+Install with one command on WSL2, Ubuntu, or the FSU cluster:
+`./setup.sh` (OpenFOAM, the MCP servers, Claude Code, Kilo, Ollama and a
+local model). The hands-on steps are in
+[`workshop/README.md`](../workshop/README.md); the cluster notes in
+[`workshop/hpc.md`](../workshop/hpc.md).
 
-Install in one of three ways: native (~5 min if OpenFOAM v2412 is already installed), Docker (~25 min one-time build), or VS Code Dev Container (~25 min one-time build). Commands in the README.
+You do **not** need Claude Code. Kilo drives the same servers with free,
+paid, or local models; `scripts/run_agent.py` drives them from the
+Anthropic API or any OpenAI-compatible server; Copilot, Codex, Cursor and
+Continue.dev read the same `.mcp.json`. See
+[`runtime-options.md`](runtime-options.md).
 
 ## Tool surface
 

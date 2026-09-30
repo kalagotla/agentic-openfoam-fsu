@@ -1,6 +1,6 @@
 # Agentic CFD with OpenFOAM
 
-Workshop materials for **Accelerating CFD Simulations with Agentic AI and OpenFOAM** — AIAA Aviation 2026, San Diego, 8–12 June 2026.
+Workshop materials for **Accelerating CFD Simulations with Agentic AI and OpenFOAM** — FSU DC-QC workshop edition (first given at AIAA Aviation 2026, San Diego).
 
 Four MCP servers (`openfoam`, `validation`, `consultant`, `research_assistant`) that let any tool-using LLM drive OpenFOAM end-to-end: set up a case, mesh, solve, validate against published reference data, and narrate every decision to `<case>/REPORT.md`.
 
@@ -39,7 +39,9 @@ Four MCP servers (`openfoam`, `validation`, `consultant`, `research_assistant`) 
 
 ```
 .
-├── README.md / CLAUDE.md / LICENSE / Dockerfile / .mcp.json / .devcontainer/
+├── README.md / CLAUDE.md / AGENTS.md / LICENSE / .mcp.json / kilo.jsonc
+├── setup.sh                  # one-command install (WSL2 / Ubuntu)
+├── workshop/                 # the hands-on walkthrough
 ├── servers/                  # four MCP servers
 │   ├── openfoam/             # actions: mesh, solve, dict I/O, record_step
 │   ├── validation/           # comparison primitives + reference-data library
@@ -57,118 +59,59 @@ Four MCP servers (`openfoam`, `validation`, `consultant`, `research_assistant`) 
 │   └── references/           # offline literature library: manifest + fetch script
 │       └── manifest.json     #   for every cited source (cache/ gitignored)
 ├── docs/                     # architecture, setup-wsl, runtime-options, …
-└── scripts/run_agent.py      # bring-your-own-agent harness (Anthropic / Ollama)
+└── scripts/                  # run_agent.py harness, local-model.sh, doctor.sh,
+                              #   workshop.sh, eval/ (benchmark harness)
 ```
 
-## Prerequisites
+## Install — one script
 
-- Linux, macOS, or Windows + WSL2 (Ubuntu 22.04 / 24.04)
-- OpenFOAM v2412 (ESI release) — setup steps in [`docs/setup-wsl.md`](docs/setup-wsl.md). v2406+ ESI and Foundation 11/12 also work.
-- Python 3.11+ and [`uv`](https://docs.astral.sh/uv/)
-- *Optional:* [Ollama](https://ollama.com/) + a 30B-class tool-use model, for running the agent fully locally
+Works on **Windows (WSL2)** and **Ubuntu 22.04 / 24.04**. No Docker, no
+manual OpenFOAM build.
 
-## Install
-
-| Path | What you need | First-run time |
-|---|---|---|
-| **Native** | OpenFOAM v2412 + git + uv | ~5 min |
-| **Docker** | [Docker](https://docs.docker.com/get-docker/) — WSL2 on Windows | ~30 min first build, instant after |
-| **Dev Container** | VS Code + Dev Containers extension | ~25 min build, instant after |
-
-### Native
+**Windows first:** in an **admin PowerShell**, `wsl --install -d Ubuntu-24.04`,
+reboot, and open the **Ubuntu** app. Run everything below in that terminal,
+from your Linux home, not `/mnt/c`.
 
 ```bash
-git clone https://github.com/kalagotla/agentic-openfoam.git
+cd ~
+git clone https://github.com/kalagotla/agentic-openfoam-fsu.git agentic-openfoam
 cd agentic-openfoam
-uv sync --all-packages
-of2412                                                       # source OpenFOAM
-cd cases/examples/pitz-daily/baseline && ./Allrun && cd -    # smoke-test
+./setup.sh            # ~10–20 min, mostly downloads; safe to re-run
 ```
 
-### Docker
+`setup.sh` installs, skipping anything already present:
 
-The image is self-contained: OpenFOAM v2412, ParaView (headless rendering),
-the four MCP servers, the `run_agent.py` harness, and the agent runtimes —
-the Claude Code CLI (`claude`), the `anthropic` Python SDK, Ollama for local
-models, and the LiteLLM proxy. No API keys or model weights are baked in.
+| | What |
+|---|---|
+| OpenFOAM v2412 | ESI apt package, plus an `of2412` alias |
+| Python | `uv` and the four MCP servers' environment |
+| ParaView + Xvfb | headless field renders for `export_field_image` |
+| Agents | Claude Code (`claude`) and the Kilo CLI (`kilo`) |
+| Local model | Ollama plus a model chosen for your GPU/RAM, exposed to the agents as `cfd-local` |
 
-**Windows:** install WSL2 first from an **admin PowerShell**, reboot, then
-open the **Ubuntu** terminal and run everything below inside it. (macOS:
-install Docker Desktop. Linux: nothing extra.)
-```powershell
-wsl --install
-```
+**On an HPC cluster** (FSU RCC) the same command runs without sudo:
+OpenFOAM v2412 comes from one shared portable Apptainer image, and the
+agents and Ollama unpack under `~/.local`. See
+[`workshop/hpc.md`](workshop/hpc.md).
 
-Clone the repo and run the bring-up script — it installs Docker if missing,
-builds the image, smoke-tests it, and drops you into a shell in `/workspace`:
-```bash
-git clone https://github.com/kalagotla/agentic-openfoam.git
-cd agentic-openfoam
-export ANTHROPIC_API_KEY=sk-ant-...   # optional; passed into the container
-./scripts/docker-up.sh                # first build ~30 min, image ~10 GB
-```
-
-Inside the container you start in `/workspace` with OpenFOAM sourced:
-```bash
-uv run pytest                                            # 329 tests
-uv run scripts/run_agent.py --backend anthropic --help   # the agent harness
-claude                                                   # Claude Code CLI
-ollama serve &                                           # local-model server
-ollama pull gpt-oss:20b                                  # pull a model (multi-GB, CPU-only here)
-```
-
-<details>
-<summary><b>What <code>docker-up.sh</code> does — or run it by hand</b></summary>
-
-```bash
-# 1. Install Docker in the WSL distro (skip on macOS/Linux if already present)
-sudo apt-get update && sudo apt-get install -y docker.io
-sudo service docker start
-sudo usermod -aG docker "$USER"          # then reopen the terminal (or: wsl --shutdown)
-
-# 2. Build, smoke-test, and open a shell
-docker build -t agentic-openfoam .
-docker run --rm agentic-openfoam bash -lc 'cd /workspace && uv run pytest'
-docker run --rm -it agentic-openfoam     # -it required; a bare `docker run` exits at once
-```
-</details>
-
-### Dev Container
-
-Install the *Dev Containers* extension in VS Code. Open the repo → Command Palette → *Dev Containers: Reopen in Container*. Details in [`.devcontainer/README.md`](.devcontainer/README.md).
-
-### Teardown
-
-`docker-down.sh` removes the image, its containers, and the build cache. Add
-`--repo` to also delete the checkout, `--docker` to uninstall docker.io:
-```bash
-./scripts/docker-down.sh                 # optionally: --repo --docker
-```
-
-<details>
-<summary><b>What it does — or run it by hand</b></summary>
-
-```bash
-docker rm -f $(docker ps -aq --filter ancestor=agentic-openfoam) 2>/dev/null || true
-docker rmi agentic-openfoam
-docker builder prune -f
-cd .. && sudo rm -rf agentic-openfoam    # sudo: a -v mount run can leave root-owned files
-```
-</details>
+It ends with `./scripts/doctor.sh`, which meshes and solves a tutorial,
+checks that Kilo sees all four MCP servers, and checks the local model.
+Options: `--model <ollama-tag>`, `--no-local`, `--no-claude`, `--no-kilo`.
+Change the local model later with `./scripts/local-model.sh <tag>`.
 
 ## Run
 
-```bash
-# Anthropic API (bring your own key):
-export ANTHROPIC_API_KEY=sk-ant-...
-uv run scripts/run_agent.py --backend anthropic \
-    --prompt "Set up and run cases/scenarios/lid-cavity.yaml"
+Open a new terminal in the repo, then pick an agent:
 
-# Local Ollama (recommended model: gpt-oss:20b — emits real OpenAI tool_calls):
-ollama serve &
-ollama pull gpt-oss:20b
-uv run scripts/run_agent.py --backend ollama --model gpt-oss:20b \
-    --prompt "Set up and run cases/scenarios/lid-cavity.yaml"
+```bash
+claude     # frontier: Claude Code
+kilo       # Kilo: Tab cycles cfd | cfd-orchestrator (frontier + local) | cfd-local (local only)
+```
+
+and give it a scenario:
+
+```
+Set up and run cases/scenarios/lid-cavity.yaml
 ```
 
 Watch the agent's audit trail in a second terminal:
@@ -177,11 +120,43 @@ Watch the agent's audit trail in a second terminal:
 tail -f cases/work/lid-cavity/REPORT.md
 ```
 
-GUI MCP clients (Claude Code, Claude Desktop, Cursor, Continue.dev, Cline) read the same `.mcp.json`. Matrix in [`docs/runtime-options.md`](docs/runtime-options.md). To use **Claude Code with a local Ollama model** (no Anthropic API key), see [`docs/local-llm-with-claude-code.md`](docs/local-llm-with-claude-code.md) — a LiteLLM proxy translates Anthropic's wire format to Ollama in both directions.
+**The workshop walkthrough is [`workshop/README.md`](workshop/README.md)**:
+the two-step persistent-knowledge demo (discover at Re = 400, reuse at
+Re = 1000), run as frontier only, frontier + local, and local only.
+
+### Kilo agents
+
+`kilo.jsonc` registers the four MCP servers and three agents:
+
+| Agent | Model | Role |
+|---|---|---|
+| `cfd` (default) | whatever `/models` selects | the full workflow in one model |
+| `cfd-orchestrator` | a frontier model you select | reads, decides, narrates, and judges; has no case-changing tools, so it delegates each hands-on step to `cfd-worker` |
+| `cfd-worker` (subagent) | `ollama/cfd-local` | executes the delegated steps (dicts, mesh, solve, analysis) |
+| `cfd-local` | `ollama/cfd-local` | the full workflow on the local model, with a trimmed tool set and prompt sized for a 64k context |
+
+Prompts live in `.kilo/prompts/`. The per-machine model context size is
+written to `.kilo/kilo.jsonc` (gitignored) by `scripts/local-model.sh`.
+
+### Other runtimes
+
+The same `.mcp.json` drives GitHub Copilot, Codex, Cursor, Claude Desktop
+and others (`AGENTS.md` points them at the workflow in `CLAUDE.md`). The
+bring-your-own-agent harness talks to the Anthropic API or any
+OpenAI-compatible server (Ollama, vLLM, LM Studio, llama.cpp):
+
+```bash
+uv run scripts/run_agent.py --backend anthropic \
+    --prompt "Set up and run cases/scenarios/lid-cavity.yaml"
+uv run scripts/run_agent.py --backend ollama --model cfd-local \
+    --prompt "Set up and run cases/scenarios/lid-cavity.yaml"
+```
+
+Matrix in [`docs/runtime-options.md`](docs/runtime-options.md).
 
 ### Claude Code settings
 
-`.claude/settings.json` is tracked and carries the project's shared Claude Code configuration, so a fresh clone is ready to run: it enables the four `.mcp.json` servers (`enabledMcpjsonServers`), pre-approves the case-authoring tool calls and `python3` invocations the workflow needs (`permissions.allow`), and registers the automation-gate `PreToolUse` hook that enforces each scenario's `automation_level`. `.claude/settings.local.json` is gitignored and holds your own per-machine overrides — it layers on top of the shared file and is never committed.
+`.claude/settings.json` is tracked and carries the project's shared Claude Code configuration, so a fresh clone is ready to run: it enables the four `.mcp.json` servers (`enabledMcpjsonServers`), pre-approves every tool on those four servers plus the `python3` invocations the workflow needs (`permissions.allow`), and registers the automation-gate `PreToolUse` hook that enforces each scenario's `automation_level`. The hook's pauses apply even to pre-approved tools, so the scenario, not the allow-list, decides where a run stops for review. Claude Code applies all of this only after you accept its "trust this folder" prompt the first time you run `claude` in the repo. `.claude/settings.local.json` is gitignored and holds your own per-machine overrides — it layers on top of the shared file and is never committed.
 
 ## Shipped scenarios
 
@@ -201,6 +176,8 @@ Schema and how to write your own: [`cases/scenarios/README.md`](cases/scenarios/
 - [`docs/setup-wsl.md`](docs/setup-wsl.md) — OpenFOAM v2412 on WSL2
 - [`docs/runtime-options.md`](docs/runtime-options.md) — Claude Code, Cursor, Cline, Continue.dev, Ollama
 - [`docs/how-to-extend-openfoam.md`](docs/how-to-extend-openfoam.md) — custom BCs, function objects, turbulence models
+- [`workshop/README.md`](workshop/README.md) — the hands-on walkthrough
+- [`docs/evaluation-plan.md`](docs/evaluation-plan.md) / [`docs/evaluation-results.md`](docs/evaluation-results.md) — how agents are scored, and the results
 - [`docs/workshop-handout.md`](docs/workshop-handout.md) — 1-page session handout
 
 ## License

@@ -407,6 +407,14 @@ class TestReadAnnotation:
         with pytest.raises(AnnotationNotFoundError):
             read_annotation("nonexistent/case")
 
+    def test_directory_form_resolves_to_nested_case(
+        self, fixture_annotations_root: Path
+    ) -> None:
+        # Agents pass the tutorial directory; the case nests under the same name.
+        ann = read_annotation("incompressible/icoFoam/cavity")
+        assert ann.metadata["solver"] == "icoFoam"
+        assert ann.tutorial_path == "incompressible/icoFoam/cavity/cavity"
+
     def test_no_frontmatter(self, fixture_annotations_root: Path) -> None:
         with pytest.raises(ValueError, match="missing YAML frontmatter"):
             read_annotation("broken/noframe")
@@ -1283,6 +1291,67 @@ class TestDraftAnnotationFromReport:
         )
         assert result["success"] is True
         assert Path(result["draft_path"]).name == "cavity.draft.md"
+
+    def test_corpus_subpath_overrides_location_not_frontmatter(
+        self, tmp_path: Path, fresh_corpus_root: Path
+    ) -> None:
+        # A case family filed by experiment: the draft lands at the
+        # corpus_subpath location, but the frontmatter tutorial_path still
+        # records the real template it derived from. This is the whole point
+        # — decoupling where the entry lives from which tutorial it borrowed.
+        case = tmp_path / "case"
+        _write_report(case, _REPORT_WITH_DECISIONS)
+        result = draft_annotation_from_report(
+            str(case),
+            tutorial_path="compressible/rhoCentralFoam/biconic25-55Run35",
+            corpus_subpath=(
+                "compressible/rhoCentralFoam/supersonic-half-cones/"
+                "twin-cone-snappy"
+            ),
+        )
+        assert result["success"] is True
+        draft_path = Path(result["draft_path"])
+        assert draft_path == (
+            fresh_corpus_root / "corpus" / "compressible" / "rhoCentralFoam"
+            / "supersonic-half-cones" / "twin-cone-snappy.draft.md"
+        )
+        assert draft_path.is_file()
+        # frontmatter template is unchanged by the relocation
+        assert (
+            "tutorial_path: compressible/rhoCentralFoam/biconic25-55Run35"
+            in draft_path.read_text()
+        )
+
+    def test_corpus_subpath_tolerates_suffix_and_slashes(
+        self, tmp_path: Path, fresh_corpus_root: Path
+    ) -> None:
+        case = tmp_path / "case"
+        _write_report(case, _REPORT_WITH_DECISIONS)
+        result = draft_annotation_from_report(
+            str(case),
+            "incompressible/icoFoam/cavity/cavity",
+            corpus_subpath="/incompressible/lid/cavity-hot.draft.md/",
+        )
+        assert result["success"] is True
+        assert Path(result["draft_path"]).name == "cavity-hot.draft.md"
+        assert (
+            fresh_corpus_root / "corpus" / "incompressible" / "lid"
+            / "cavity-hot.draft.md"
+        ).is_file()
+
+    def test_invalid_corpus_subpath(
+        self, tmp_path: Path, fresh_corpus_root: Path
+    ) -> None:
+        case = tmp_path / "case"
+        _write_report(case, _REPORT_WITH_DECISIONS)
+        for bad in ("   ", "a/../escape"):
+            result = draft_annotation_from_report(
+                str(case),
+                "incompressible/icoFoam/cavity/cavity",
+                corpus_subpath=bad,
+            )
+            assert result["success"] is False
+            assert result["reason"] == "invalid_corpus_subpath"
 
 
 # ---------------------------------------------------------------------------

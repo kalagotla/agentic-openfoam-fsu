@@ -1,8 +1,8 @@
 # Scenario: 2-D lid-driven cavity at Re = 1000 (Ghia 1982 reference).
 #
-# This is Demo 2 — the corpus-reuse demo. It is the SAME tutorial template as
-# Demo 1 (lid-cavity.yaml, Re=400), one Reynolds number higher. By the time
-# this runs, Demo 1 has produced — and the presenter has reviewed and promoted
+# Workshop Step 2 (reuse) — see workshop/README.md. It is the SAME tutorial
+# template as Step 1 (lid-cavity.yaml, Re=400), one Reynolds number higher. By
+# the time this runs, Step 1 has produced — and the researcher has reviewed and promoted
 # — a corpus entry at corpus/incompressible/icoFoam/cavity/cavity.md. When the
 # agent picks this tutorial as its template it calls
 # consultant.get_tutorial_annotation on that path and inherits the learned
@@ -10,7 +10,7 @@
 # reference cell for the closed domain, tighten residualControl before a grid
 # study, and reach Ghia-quality profiles with a well-resolved grid rather than
 # the tutorial's coarse 20x20. So this run should skip the coarse-mesh failure
-# that Demo 1 had to discover, and converge in fewer iterations.
+# that Step 1 had to discover, and converge in fewer iterations.
 #
 # Re=1000 is still steady and laminar, well within the regime where a steady
 # solver is valid. The 2-D cavity does become time-periodic at high enough Re;
@@ -22,7 +22,7 @@
 name: lid-cavity-re1000
 description: >
   Two-dimensional lid-driven cavity flow at Re = 1000 — one step up from
-  Demo 1's Re=400, same geometry and benchmark family (Ghia, Ghia & Shin
+  Step 1's Re=400, same geometry and benchmark family (Ghia, Ghia & Shin
   1982). Validate the centerline u(y) and v(x) profiles against the Re=1000
   reference columns.
 

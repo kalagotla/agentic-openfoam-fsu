@@ -51,6 +51,121 @@ Verdict = Literal["good", "acceptable", "marginal", "poor", "unknown"]
 VERDICT_ORDER = ("good", "acceptable", "marginal", "poor", "unknown")
 
 
+@dataclass(frozen=True)
+class MeshThresholds:
+    """Where each mesh metric's quality bands begin.
+
+    The values are the shipped defaults, sourced in
+    ``docs/consultant-threshold-provenance.md``; they are a dataclass
+    rather than literals so a study can move the operating point without
+    re-implementing the verdict logic somewhere else. That matters here:
+    the evaluation's detection curve has to come from the same tested
+    function an agent calls, or it measures a copy rather than the tool.
+
+    Each field gives the three cut points separating good / acceptable /
+    marginal / poor. ``degenerate_non_orthogonality`` is not a quality
+    band — it is the angle at which checkMesh calls the cell broken — so
+    it is held apart from the tunable three.
+    """
+
+    non_orthogonality: tuple[float, float, float] = (60.0, 70.0, 80.0)
+    degenerate_non_orthogonality: float = 90.0
+    skewness: tuple[float, float, float] = (1.0, 4.0, 10.0)
+    aspect_ratio: tuple[float, float, float] = (10.0, 100.0, 1000.0)
+    # Severe-face counts are judged as a fraction of the cell count, so
+    # these are fractions rather than absolute counts.
+    severe_face_fraction: tuple[float, float] = (0.001, 0.01)
+
+    def scaled(self, factor: float) -> "MeshThresholds":
+        """The same bands, tightened (< 1) or loosened (> 1) together.
+
+        One scalar moves every metric's boundary in the same direction,
+        which is what a detection curve needs: a family of operating
+        points ordered from strict to permissive. The degenerate angle
+        does not move — a 90-degree cell is broken at any strictness.
+        """
+        if factor <= 0:
+            raise ValueError("factor must be positive")
+        return MeshThresholds(
+            non_orthogonality=_scale3(self.non_orthogonality, factor),
+            degenerate_non_orthogonality=self.degenerate_non_orthogonality,
+            skewness=_scale3(self.skewness, factor),
+            aspect_ratio=_scale3(self.aspect_ratio, factor),
+            severe_face_fraction=(
+                self.severe_face_fraction[0] * factor,
+                self.severe_face_fraction[1] * factor,
+            ),
+        )
+
+
+def _scale3(band: tuple[float, float, float], factor: float) -> tuple[float, float, float]:
+    return (band[0] * factor, band[1] * factor, band[2] * factor)
+
+
+DEFAULT_MESH_THRESHOLDS = MeshThresholds()
+
+
+@dataclass(frozen=True)
+class ResidualThresholds:
+    """The cut points that separate one convergence pattern from another.
+
+    Parameterised for the same reason the mesh bands are: a detection curve
+    has to come from the same tested function an agent calls. The knob is
+    `sensitivity` rather than a plain scale, because these cuts are not all
+    oriented the same way. Lowering the oscillation cut flags *more*;
+    lowering the stall cut flags *less*. A single multiplier would move
+    them against each other and produce a curve that is not a curve.
+    """
+
+    converged: float = 1e-5
+    # A converged run may still wobble; the tail is allowed this multiple
+    # of the convergence threshold.
+    converged_tail_factor: float = 2.0
+    # Coefficient of variation over the window, above which a
+    # non-monotonic history reads as oscillating.
+    oscillating_cov: float = 0.3
+    # ...and below which a history that never reached the threshold reads
+    # as stalled rather than merely slow.
+    stalled_cov: float = 0.05
+    # Last value this multiple above the window's reference reads as
+    # diverging.
+    diverging_factor: float = 2.0
+    # Drop over the window needed to call a run still-running rather than
+    # unclassifiable.
+    still_running_factor: float = 3.0
+    window: int = 50
+
+    def at_sensitivity(self, sensitivity: float) -> "ResidualThresholds":
+        """The same classifier, more (>1) or less (<1) eager to flag.
+
+        Every cut moves in the direction that raises detection, so recall
+        is monotone in the parameter and the resulting curve is ordered.
+        """
+        if sensitivity <= 0:
+            raise ValueError("sensitivity must be positive")
+        return ResidualThresholds(
+            # A stricter convergence bar leaves more runs unconverged.
+            converged=self.converged / sensitivity,
+            converged_tail_factor=self.converged_tail_factor / sensitivity,
+            # Flag oscillation on a smaller wobble.
+            oscillating_cov=self.oscillating_cov / sensitivity,
+            # Call a flat history stalled at a larger wobble.
+            stalled_cov=self.stalled_cov * sensitivity,
+            # Call a rise divergence sooner.
+            diverging_factor=self.diverging_factor / sensitivity,
+            still_running_factor=self.still_running_factor,
+            window=self.window,
+        )
+
+
+DEFAULT_RESIDUAL_THRESHOLDS = ResidualThresholds()
+
+
+def _num(value: float) -> str:
+    """Format a threshold for a band label without trailing noise."""
+    return f"{value:g}"
+
+
 @dataclass
 class MetricVerdict:
     """One metric's verdict + rationale + suggested action."""
@@ -73,7 +188,10 @@ class MetricVerdict:
         }
 
 
-def assess_non_orthogonality(angle: float | None) -> MetricVerdict:
+def assess_non_orthogonality(
+    angle: float | None,
+    thresholds: MeshThresholds = DEFAULT_MESH_THRESHOLDS,
+) -> MetricVerdict:
     """Verdict on the maximum non-orthogonality angle (degrees).
 
     Non-orthogonality is the angle between the line connecting two
@@ -94,35 +212,36 @@ def assess_non_orthogonality(angle: float | None) -> MetricVerdict:
             ),
             cites=[],
         )
-    if angle < 60.0:
+    good_to, acceptable_to, marginal_to = thresholds.non_orthogonality
+    if angle < good_to:
         return MetricVerdict(
             metric="max_non_orthogonality",
             value=angle,
             verdict="good",
-            threshold_band="< 60 deg",
+            threshold_band=f"< {_num(good_to)} deg",
             recommendation=(
                 "No corrector needed — standard fvSchemes settings are fine."
             ),
             cites=["of_check_mesh_src"],
         )
-    if angle < 70.0:
+    if angle < acceptable_to:
         return MetricVerdict(
             metric="max_non_orthogonality",
             value=angle,
             verdict="acceptable",
-            threshold_band="60–70 deg",
+            threshold_band=f"{_num(good_to)}–{_num(acceptable_to)} deg",
             recommendation=(
                 "Set fvSolution.SIMPLE.nNonOrthogonalCorrectors = 1 "
                 "(or PIMPLE for transient). Default 0 may slow convergence."
             ),
             cites=["of_check_mesh_src", "of_mesh_quality_dict"],
         )
-    if angle < 80.0:
+    if angle < marginal_to:
         return MetricVerdict(
             metric="max_non_orthogonality",
             value=angle,
             verdict="marginal",
-            threshold_band="70–80 deg",
+            threshold_band=f"{_num(acceptable_to)}–{_num(marginal_to)} deg",
             recommendation=(
                 "Raise nNonOrthogonalCorrectors to 2–3 and use the "
                 "``limited`` divergence/grad schemes (e.g. ``Gauss "
@@ -130,12 +249,15 @@ def assess_non_orthogonality(angle: float | None) -> MetricVerdict:
             ),
             cites=["of_user_guide", "versteeg"],
         )
-    if angle < 90.0:
+    if angle < thresholds.degenerate_non_orthogonality:
         return MetricVerdict(
             metric="max_non_orthogonality",
             value=angle,
             verdict="poor",
-            threshold_band="80–90 deg",
+            threshold_band=(
+                f"{_num(marginal_to)}–"
+                f"{_num(thresholds.degenerate_non_orthogonality)} deg"
+            ),
             recommendation=(
                 "Convergence is unreliable above 80 deg even with many "
                 "non-orthogonal correctors. Recommend re-meshing the "
@@ -147,7 +269,9 @@ def assess_non_orthogonality(angle: float | None) -> MetricVerdict:
         metric="max_non_orthogonality",
         value=angle,
         verdict="poor",
-        threshold_band="≥ 90 deg",
+        threshold_band=(
+            f"≥ {_num(thresholds.degenerate_non_orthogonality)} deg"
+        ),
         recommendation=(
             "checkMesh treats this as an outright failure. Re-mesh — "
             "no scheme can paper over a degenerate cell."
@@ -156,7 +280,10 @@ def assess_non_orthogonality(angle: float | None) -> MetricVerdict:
     )
 
 
-def assess_skewness(skewness: float | None) -> MetricVerdict:
+def assess_skewness(
+    skewness: float | None,
+    thresholds: MeshThresholds = DEFAULT_MESH_THRESHOLDS,
+) -> MetricVerdict:
     """Verdict on the maximum face skewness.
 
     Skewness measures how far a face-centre lies from the line joining
@@ -177,33 +304,34 @@ def assess_skewness(skewness: float | None) -> MetricVerdict:
             ),
             cites=[],
         )
-    if skewness < 1.0:
+    good_to, acceptable_to, marginal_to = thresholds.skewness
+    if skewness < good_to:
         return MetricVerdict(
             metric="max_skewness",
             value=skewness,
             verdict="good",
-            threshold_band="< 1",
+            threshold_band=f"< {_num(good_to)}",
             recommendation="No action — well within all solver tolerances.",
             cites=["of_check_mesh_src"],
         )
-    if skewness < 4.0:
+    if skewness < acceptable_to:
         return MetricVerdict(
             metric="max_skewness",
             value=skewness,
             verdict="acceptable",
-            threshold_band="1–4",
+            threshold_band=f"{_num(good_to)}–{_num(acceptable_to)}",
             recommendation=(
                 "OK in practice; consider ``limited`` gradient schemes "
                 "(``cellLimited Gauss linear 1``) if convergence slows."
             ),
             cites=["of_check_mesh_src", "of_mesh_quality_dict"],
         )
-    if skewness < 10.0:
+    if skewness < marginal_to:
         return MetricVerdict(
             metric="max_skewness",
             value=skewness,
             verdict="marginal",
-            threshold_band="4–10",
+            threshold_band=f"{_num(acceptable_to)}–{_num(marginal_to)}",
             recommendation=(
                 "Above the checkMesh hex default fail (4). Either "
                 "re-mesh the local region or accept the trade and use "
@@ -215,7 +343,7 @@ def assess_skewness(skewness: float | None) -> MetricVerdict:
         metric="max_skewness",
         value=skewness,
         verdict="poor",
-        threshold_band="≥ 10",
+        threshold_band=f"≥ {_num(marginal_to)}",
         recommendation=(
             "Highly skewed faces — likely a snappyHexMesh artefact at "
             "geometry intersections. Re-meshing is the right call; "
@@ -225,7 +353,10 @@ def assess_skewness(skewness: float | None) -> MetricVerdict:
     )
 
 
-def assess_aspect_ratio(ratio: float | None) -> MetricVerdict:
+def assess_aspect_ratio(
+    ratio: float | None,
+    thresholds: MeshThresholds = DEFAULT_MESH_THRESHOLDS,
+) -> MetricVerdict:
     """Verdict on the maximum cell aspect ratio.
 
     Aspect ratio is the ratio of a cell's longest dimension to its
@@ -244,36 +375,37 @@ def assess_aspect_ratio(ratio: float | None) -> MetricVerdict:
             ),
             cites=[],
         )
-    if ratio < 10.0:
+    good_to, acceptable_to, marginal_to = thresholds.aspect_ratio
+    if ratio < good_to:
         return MetricVerdict(
             metric="max_aspect_ratio",
             value=ratio,
             verdict="good",
-            threshold_band="< 10",
+            threshold_band=f"< {_num(good_to)}",
             recommendation=(
                 "Cells are nearly isotropic — appropriate for bulk-flow "
                 "regions or low-Re cavity-class problems."
             ),
             cites=["versteeg"],
         )
-    if ratio < 100.0:
+    if ratio < acceptable_to:
         return MetricVerdict(
             metric="max_aspect_ratio",
             value=ratio,
             verdict="acceptable",
-            threshold_band="10–100",
+            threshold_band=f"{_num(good_to)}–{_num(acceptable_to)}",
             recommendation=(
                 "Typical for moderately wall-resolved meshes. Watch "
                 "the linear-solver iteration count near the wall."
             ),
             cites=["versteeg"],
         )
-    if ratio < 1000.0:
+    if ratio < marginal_to:
         return MetricVerdict(
             metric="max_aspect_ratio",
             value=ratio,
             verdict="marginal",
-            threshold_band="100–1000",
+            threshold_band=f"{_num(acceptable_to)}–{_num(marginal_to)}",
             recommendation=(
                 "High aspect ratio — typical of y+ ~ 1 boundary layers. "
                 "Use GAMG / PBiCG with tight tolerances; the pressure "
@@ -285,7 +417,7 @@ def assess_aspect_ratio(ratio: float | None) -> MetricVerdict:
         metric="max_aspect_ratio",
         value=ratio,
         verdict="poor",
-        threshold_band="≥ 1000",
+        threshold_band=f"≥ {_num(marginal_to)}",
         recommendation=(
             "Very high aspect ratio. Consider wall functions (relaxes "
             "y+ to ~30) instead of resolved y+ ~ 1, or accept slower "
@@ -298,6 +430,7 @@ def assess_aspect_ratio(ratio: float | None) -> MetricVerdict:
 def assess_severe_non_orthogonal(
     n_faces: int | None,
     n_cells: int | None,
+    thresholds: MeshThresholds = DEFAULT_MESH_THRESHOLDS,
 ) -> MetricVerdict:
     """Verdict on the count of severely non-orthogonal faces.
 
@@ -342,24 +475,27 @@ def assess_severe_non_orthogonal(
             ),
             cites=[],
         )
-    if n_faces / n_cells < 0.001:
+    acceptable_to, marginal_to = thresholds.severe_face_fraction
+    if n_faces / n_cells < acceptable_to:
         return MetricVerdict(
             metric="severe_non_orthogonal_faces",
             value=float(n_faces),
             verdict="acceptable",
-            threshold_band="< 0.1% of cells",
+            threshold_band=f"< {_num(acceptable_to * 100)}% of cells",
             recommendation=(
                 "Small count — typically tolerable; ensure "
                 "nNonOrthogonalCorrectors ≥ 1."
             ),
             cites=["of_check_mesh_src"],
         )
-    if n_faces / n_cells < 0.01:
+    if n_faces / n_cells < marginal_to:
         return MetricVerdict(
             metric="severe_non_orthogonal_faces",
             value=float(n_faces),
             verdict="marginal",
-            threshold_band="0.1–1% of cells",
+            threshold_band=(
+                f"{_num(acceptable_to * 100)}–{_num(marginal_to * 100)}% of cells"
+            ),
             recommendation=(
                 "Non-trivial; consider local mesh refinement at the "
                 "offending region. Use ``checkMesh -writeAllFields`` "
@@ -371,7 +507,9 @@ def assess_severe_non_orthogonal(
         metric="severe_non_orthogonal_faces",
         value=float(n_faces),
         verdict="poor",
-        threshold_band="> 1% of cells (or many on small mesh)",
+        threshold_band=(
+            f"> {_num(marginal_to * 100)}% of cells (or many on small mesh)"
+        ),
         recommendation=(
             "Systematic non-orthogonality. The mesh has a topology "
             "problem — re-mesh rather than band-aid with correctors."
@@ -482,8 +620,9 @@ class ResidualVerdict:
 def assess_residual_pattern(
     field: str,
     history: list[float],
-    threshold: float = 1e-5,
-    window: int = 50,
+    threshold: float | None = None,
+    window: int | None = None,
+    bands: ResidualThresholds = DEFAULT_RESIDUAL_THRESHOLDS,
 ) -> ResidualVerdict:
     """Classify the convergence pattern of one field's initial residuals.
 
@@ -517,6 +656,11 @@ def assess_residual_pattern(
     - ``insufficient_data``: history has fewer than 5 entries — can't
       classify.
     """
+    # `threshold` and `window` predate the bands object and callers still
+    # pass them; an explicit argument wins over the band it corresponds to.
+    threshold = bands.converged if threshold is None else threshold
+    window = bands.window if window is None else window
+
     n = len(history)
     if n < 5:
         return ResidualVerdict(
@@ -594,7 +738,7 @@ def assess_residual_pattern(
     # earlier strict "whole window below threshold" check missed clean
     # convergence cases where the run-up still had values around threshold.
     tail = window_values[-min(10, len(window_values)):]
-    if last <= threshold and max(tail) <= 2.0 * threshold:
+    if last <= threshold and max(tail) <= bands.converged_tail_factor * threshold:
         return ResidualVerdict(
             field=field,
             pattern="converged",
@@ -614,7 +758,7 @@ def assess_residual_pattern(
     # Checked BEFORE diverging because an oscillating signal can have
     # last ≥ 2× first by chance (depending on which half of the cycle
     # it ends on), and oscillation is the more informative diagnosis.
-    if cov > 0.3 and not (strictly_dec or strictly_inc):
+    if cov > bands.oscillating_cov and not (strictly_dec or strictly_inc):
         return ResidualVerdict(
             field=field,
             pattern="oscillating",
@@ -634,7 +778,7 @@ def assess_residual_pattern(
         )
 
     # --- Diverging: last ≥ 2× the reference value over the window.
-    if ref > 0 and last >= 2 * ref:
+    if ref > 0 and last >= bands.diverging_factor * ref:
         return ResidualVerdict(
             field=field,
             pattern="diverging",
@@ -654,7 +798,7 @@ def assess_residual_pattern(
         )
 
     # --- Stalled: low CoV but above threshold.
-    if cov < 0.05 and last > threshold:
+    if cov < bands.stalled_cov and last > threshold:
         return ResidualVerdict(
             field=field,
             pattern="stalled",
@@ -676,7 +820,7 @@ def assess_residual_pattern(
         )
 
     # --- Still running: dropping, but not at threshold yet.
-    if ref > 0 and last < ref / 3:
+    if ref > 0 and last < ref / bands.still_running_factor:
         return ResidualVerdict(
             field=field,
             pattern="still_running",

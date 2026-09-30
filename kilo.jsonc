@@ -1,0 +1,135 @@
+{
+  // Kilo CLI project config for the agentic-openfoam workshop.
+  // Start Kilo from the repo root (`kilo`), press Tab to cycle agents:
+  //   cfd               — one model does everything (whatever /models picks)
+  //   cfd-orchestrator  — frontier model plans + judges, delegates the
+  //                       tool work to the cfd-worker subagent (local model)
+  //   cfd-local         — the local Ollama model does everything
+  // The local model is the Ollama alias `cfd-local`, created by
+  // scripts/local-model.sh (re-run it to switch models).
+  "$schema": "https://app.kilo.ai/config.json",
+
+  // `kilo` with no --agent starts here. Workflow instructions come from each
+  // agent's prompt (.kilo/prompts/), not from a global instructions file, so
+  // the local agents can carry a slim prompt that fits a 64k context.
+  "default_agent": "cfd",
+
+  // MCP tool calls and in-repo edits run without a prompt; shell commands
+  // still ask. automation_level pauses are honoured by the agent prompts.
+  "permission": {
+    "openfoam_*": "allow",
+    "validation_*": "allow",
+    "consultant_*": "allow",
+    "research_assistant_*": "allow",
+    "edit": "allow",
+    "bash": "ask"
+  },
+
+  "mcp": {
+    "openfoam": {
+      "type": "local",
+      "command": ["scripts/with-openfoam.sh", "uv", "run", "--package", "openfoam-mcp", "python", "-m", "openfoam_mcp"],
+      "timeout": 60000
+    },
+    "validation": {
+      "type": "local",
+      "command": ["uv", "run", "--package", "validation-mcp", "python", "-m", "validation_mcp"],
+      "timeout": 60000
+    },
+    "consultant": {
+      "type": "local",
+      "command": ["uv", "run", "--package", "consultant-mcp", "python", "-m", "consultant_mcp"],
+      "timeout": 60000
+    },
+    "research_assistant": {
+      "type": "local",
+      "command": ["scripts/with-openfoam.sh", "uv", "run", "--package", "research-assistant-mcp", "python", "-m", "research_assistant_mcp"],
+      "timeout": 60000
+    }
+  },
+
+  "provider": {
+    "ollama": {
+      "name": "Ollama (local)",
+      "options": { "baseURL": "http://localhost:11434/v1" },
+      "models": {
+        "cfd-local": {
+          "name": "cfd-local (see scripts/local-model.sh)",
+          "tool_call": true,
+          "limit": { "context": 32768, "output": 8192 }
+        }
+      }
+    }
+  },
+
+  "agent": {
+    "cfd": {
+      "mode": "primary",
+      "description": "Set up, run and validate a CFD case end-to-end with the current model.",
+      "prompt": "{file:./.kilo/prompts/cfd.md}"
+    },
+    "cfd-orchestrator": {
+      "mode": "primary",
+      "description": "Frontier model plans and judges; delegates tool work to the local cfd-worker.",
+      "prompt": "{file:./.kilo/prompts/cfd-orchestrator.md}"
+      // Delegation is enforced by the prompt, not by removing tools: Kilo
+      // applies an agent's `tools`/`permission` denials to the subagents it
+      // spawns, so denying the action tools here would strip cfd-worker too.
+    },
+    "cfd-worker": {
+      "mode": "subagent",
+      "model": "ollama/cfd-local",
+      // Low temperature: at the default (1.0) gpt-oss garbles tool arguments.
+      "temperature": 0.2,
+      "description": "Local-model worker: executes concrete CFD steps (author dicts, mesh, solve, run analysis) through the MCP tools and reports the results. Give it exact tool names and arguments.",
+      "prompt": "{file:./.kilo/prompts/cfd-worker.md}",
+      // Only the action tools: keeps the tool schemas small for a local model.
+      "tools": {
+        "research_assistant_*": false,
+        "openfoam_list_tutorials": false,
+        "openfoam_record_step": false,
+        "openfoam_finalize_report": false,
+        "openfoam_prepare_surface_mesh": false,
+        "openfoam_run_snappy_hex_mesh": false,
+        "openfoam_decompose_par": false,
+        "openfoam_reconstruct_par": false,
+        "validation_list_references": false,
+        "validation_read_reference": false,
+        "validation_compare_profiles": false,
+        "validation_compare_scalar": false,
+        "validation_check_convergence": false,
+        "consultant_assess_y_plus": false,
+        "consultant_get_tutorial_annotation": false,
+        "consultant_list_tutorial_annotations": false,
+        "consultant_draft_annotation_from_report": false,
+        "consultant_flag_uncited_claims": false,
+        "task": false, "todowrite": false, "webfetch": false, "websearch": false,
+        "skill": false, "codesearch": false, "lsp": false, "question": false
+      }
+    },
+    "cfd-local": {
+      "mode": "primary",
+      "model": "ollama/cfd-local",
+      "temperature": 0.2,
+      "description": "Local-only: the Ollama model drives the whole workflow.",
+      "prompt": "{file:./.kilo/prompts/cfd-local.md}",
+      // Trimmed to the tools the blockMesh workflow uses, so the prompt plus
+      // tool schemas stay ~20k tokens and leave room to work.
+      "tools": {
+        "research_assistant_*": false,
+        "openfoam_prepare_surface_mesh": false,
+        "openfoam_run_snappy_hex_mesh": false,
+        "openfoam_decompose_par": false,
+        "openfoam_reconstruct_par": false,
+        "openfoam_export_field_image": false,
+        "validation_compare_profiles": false,
+        "validation_compare_scalar": false,
+        "validation_check_convergence": false,
+        "consultant_assess_y_plus": false,
+        "consultant_list_tutorial_annotations": false,
+        "task": false, "todowrite": false, "webfetch": false, "websearch": false,
+        "skill": false, "codesearch": false, "lsp": false, "question": false
+      }
+    }
+  }
+}

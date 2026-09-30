@@ -1,0 +1,79 @@
+# Tier 0 of docs/evaluation-plan.md: everything that runs without an LLM.
+#
+# The scorer is tested for the same reason `compare_profiles` is — an
+# evaluation whose measuring instrument is untested inherits exactly the
+# flaw it exists to detect. That is what this gate protects.
+#
+# OpenFOAM is not installed here. The tests that need it skip with a stated
+# reason rather than passing vacuously, and the job asserts the skip count
+# so a test cannot quietly become permanently skipped.
+name: tier0
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync dependencies
+        run: uv sync --all-packages --all-extras --dev
+
+      - name: Run the suite
+        run: uv run pytest scripts servers -q --junitxml=results.xml
+
+      - name: Check nothing skipped silently
+        # A skip is fine when OpenFOAM is genuinely absent; a growing skip
+        # count is how a test stops being run without anyone noticing.
+        run: |
+          uv run python - <<'PY'
+          import xml.etree.ElementTree as ET
+          root = ET.parse("results.xml").getroot()
+          suite = root if root.tag == "testsuite" else root[0]
+          skipped = int(suite.get("skipped", 0))
+          total = int(suite.get("tests", 0))
+          print(f"{total} tests, {skipped} skipped")
+          # 12 environment-dependent tests skip without OpenFOAM installed, 2
+          # need the cavity corpus entry the workshop demo earns live, and 1
+          # needs a committed archived lid-cavity baseline (an attendee's
+          # Step 1 run writes it; the repo does not ship one).
+          assert skipped <= 15, f"{skipped} skipped, expected at most 15"
+          PY
+
+      - name: Lint the evaluation harness
+        # Scoped to scripts/eval, which is clean. The servers carry
+        # pre-existing findings that predate this workflow; widening the
+        # scope is a separate piece of work, not a gate to bolt on here.
+        run: uv run ruff check scripts/eval
+
+  probes:
+    # The assessment-only detection arm: no LLM, no OpenFOAM, milliseconds
+    # per probe. Cheap enough to run on every push.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync dependencies
+        run: uv sync --all-packages --all-extras --dev
+
+      - name: Tool arm over the fault corpus
+        run: uv run python scripts/eval/probe_runner.py --workdir "$RUNNER_TEMP/probes"
+
+      - name: Detection curve
+        run: uv run python scripts/eval/roc_sweep.py --workdir "$RUNNER_TEMP/roc"

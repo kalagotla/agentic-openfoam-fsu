@@ -1,6 +1,6 @@
 # Scenario: 2-D lid-driven cavity at Re = 400 (Ghia 1982 reference).
 #
-# This is the Demo 1 scenario. The corpus under corpus/ ships empty by
+# Workshop Step 1 (discover) — see workshop/README.md. The corpus under corpus/ ships empty by
 # design — running this case to a validated result and promoting a
 # corpus/incompressible/icoFoam/cavity/cavity.md entry from the REPORT
 # is the live demonstration of the build-from-runs loop.

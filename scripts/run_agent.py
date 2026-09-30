@@ -13,10 +13,9 @@ How it works (roughly 4 conceptual steps):
   2. Ask each server for its tool list. Flatten into one set of tools
      the agent can call, prefixed with the server name (``openfoam__write_dict``)
      so we know how to route tool calls back.
-  3. Read ``CLAUDE.md`` as the system prompt — the same instructions
-     Claude Code reads. Send the user's prompt + tools to the chosen
-     backend (Anthropic API or Ollama via its OpenAI-compatible
-     endpoint).
+  3. Read the system prompt — ``CLAUDE.md`` for Anthropic, the slim
+     ``scripts/local_system_prompt.md`` for an OpenAI-compatible
+     endpoint. Send the user's prompt + tools to the chosen backend.
   4. Loop: if the model emits tool calls, execute them via the
      appropriate MCP session, append the results to the message
      history, and call the model again. Stop when the model emits a
@@ -29,13 +28,29 @@ Usage:
     uv run scripts/run_agent.py --backend anthropic \\
         --prompt "Set up and run the cases/scenarios/lid-cavity.yaml scenario"
 
-    # Backend 2: Local Ollama (free). Recommended model: gpt-oss:20b
-    # — emits real OpenAI-style tool_calls. See scripts/litellm_proxy.yaml
-    # if you want to drive Claude Code (not this harness) with a local model.
+    # Backend 2: any OpenAI-compatible server. They differ only in where
+    # they listen, so the named backends are shorthand for a default port.
+
+    # Local Ollama (free). Recommended model: gpt-oss:20b — emits real
+    # OpenAI-style tool_calls.
     ollama serve &
     ollama pull gpt-oss:20b
     uv run scripts/run_agent.py --backend ollama --model gpt-oss:20b \\
         --prompt "List the available reference datasets"
+
+    # A vLLM server, local or remote. With no --model the harness asks the
+    # server what it is serving.
+    uv run scripts/run_agent.py --backend vllm \\
+        --base-url http://<host>:8000/v1 \\
+        --prompt "Set up and run cases/scenarios/lid-cavity.yaml"
+
+    # Anything else (LM Studio, llama.cpp, a hosted endpoint):
+    uv run scripts/run_agent.py --backend openai \\
+        --base-url https://<host>/v1 --api-key-env MY_KEY --model <name> \\
+        --prompt "..."
+
+    # See scripts/litellm_proxy.yaml if you want to drive Claude Code
+    # (not this harness) with a local model.
 
 Intentionally short and readable — the agent loop should be followable
 in under 10 minutes of reading.
@@ -45,11 +60,11 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import difflib
 import json
 import os
 import re
 import sys
+import time as _time
 from contextlib import AsyncExitStack
 from pathlib import Path
 from typing import Any
@@ -59,33 +74,156 @@ from mcp.client.stdio import stdio_client
 
 # Shared automation-level gate (same policy the Claude Code hook uses).
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from automation_gate import gate_decision  # noqa: E402
+from automation_gate import gate_decision
 
 # Default model picks. Override on the command line as needed.
 DEFAULT_ANTHROPIC_MODEL = "claude-opus-4-7"
 DEFAULT_OLLAMA_MODEL = "gpt-oss:20b"
+
+# Any server speaking the OpenAI chat-completions API works — Ollama, vLLM,
+# LM Studio, llama.cpp, or a hosted endpoint. They differ only in where they
+# listen, so the backend is one code path with per-server defaults rather
+# than one branch per vendor.
 DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434/v1"
+DEFAULT_VLLM_BASE_URL = "http://localhost:8000/v1"
+DEFAULT_LMSTUDIO_BASE_URL = "http://localhost:1234/v1"
 
-# Iteration budgets differ by backend. A frontier Anthropic model lands a
-# clean tool call almost every turn, so 50 is ample. A 20–30B local model
-# corrupts roughly half its tool names / arguments and (for reasoning
-# models like gpt-oss) regularly burns a turn entirely in the reasoning
-# channel, returning an empty final channel — so it needs far more headroom
-# to reach a validated case. Override with ``--max-iters``.
-DEFAULT_ANTHROPIC_MAX_ITERS = 50
-DEFAULT_OLLAMA_MAX_ITERS = 150
+# backend name -> (family, default base URL, default model)
+BACKENDS: dict[str, tuple[str, str | None, str | None]] = {
+    "anthropic": ("anthropic", None, DEFAULT_ANTHROPIC_MODEL),
+    "openai": ("openai", None, None),
+    "ollama": ("openai", DEFAULT_OLLAMA_BASE_URL, DEFAULT_OLLAMA_MODEL),
+    "vllm": ("openai", DEFAULT_VLLM_BASE_URL, None),
+    "lmstudio": ("openai", DEFAULT_LMSTUDIO_BASE_URL, None),
+}
 
-# How many non-productive turns in a row (empty final channel, or content
-# that looks like a botched tool call we could not parse) the Ollama loop
-# tolerates before giving up. A reasoning model often needs a nudge or two
-# to emit into the final channel; a genuinely wedged one would otherwise
-# spin out the whole iteration budget doing nothing.
-MAX_CONSECUTIVE_STALLS = 12
+
+def resolve_backend(name: str) -> tuple[str, str | None, str | None]:
+    """Map a backend name to its family, default endpoint, and default model."""
+    try:
+        return BACKENDS[name]
+    except KeyError:
+        raise SystemExit(
+            f"Unknown backend {name!r}. Choose one of: {', '.join(sorted(BACKENDS))}"
+        ) from None
+
+
+def discover_model(base_url: str, api_key: str) -> str | None:
+    """Ask an OpenAI-compatible server which model it is serving.
+
+    A local server usually serves exactly one model, often under a long
+    path-like name that is tedious to retype (and easy to get subtly wrong).
+    Asking is more reliable than defaulting.
+    """
+    import json as _json
+    import urllib.error
+    import urllib.request
+
+    url = base_url.rstrip("/") + "/models"
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {api_key}"})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            payload = _json.loads(resp.read().decode("utf-8"))
+    except (urllib.error.URLError, OSError, ValueError):
+        return None
+    data = payload.get("data") or []
+    if not data:
+        return None
+    first = data[0]
+    return first.get("id") if isinstance(first, dict) else None
+
+# Output cap per model response. OpenFOAM dictionaries are long — a
+# blockMeshDict with a graded multi-block topology runs to thousands of
+# tokens — so a small cap truncates the agent mid-file.
+MAX_RESPONSE_TOKENS = 16384
 
 # We prefix MCP tool names with their server so the agent knows which
 # server to route the call back to. Keep it filesystem-safe (no dots /
 # slashes) since some backends are picky about tool-name characters.
 TOOL_NAME_SEP = "__"
+
+
+# ---------------------------------------------------------------------------
+# Run ledger — what one run cost
+# ---------------------------------------------------------------------------
+
+
+class RunLedger:
+    """Tally of one agent run: iterations, tool calls, tokens, wall-clock.
+
+    Written out as JSON with ``--run-summary`` so a run's cost is a
+    measured number rather than an estimate. Both backends update the same
+    ledger, which is what makes an Anthropic run and an Ollama run
+    comparable on the same axes.
+    """
+
+    def __init__(self, backend: str, model: str, prompt: str) -> None:
+        self.backend = backend
+        self.model = model
+        self.prompt = prompt
+        # Which endpoint served the run. Two local servers can host the same
+        # model name and behave differently, so the record names both.
+        self.base_url: str | None = None
+        self.started_at = _time.time()
+        self.finished_at: float | None = None
+        self.iterations = 0
+        self.stop_reason: str | None = None
+        self.input_tokens = 0
+        self.output_tokens = 0
+        self.cache_read_tokens = 0
+        self.cache_write_tokens = 0
+        self.tool_calls = 0
+        self.tool_errors = 0
+        self.per_tool: dict[str, int] = {}
+        self.case_paths: list[str] = []
+
+    def record_usage(self, usage: Any) -> None:
+        """Absorb a response's usage block from either backend's shape."""
+        if usage is None:
+            return
+        get = (
+            usage.get
+            if isinstance(usage, dict)
+            else lambda k, d=0: getattr(usage, k, d) or d
+        )
+        self.input_tokens += int(get("input_tokens", 0) or get("prompt_tokens", 0))
+        self.output_tokens += int(
+            get("output_tokens", 0) or get("completion_tokens", 0)
+        )
+        self.cache_read_tokens += int(get("cache_read_input_tokens", 0))
+        self.cache_write_tokens += int(get("cache_creation_input_tokens", 0))
+
+    def record_tool(self, name: str, is_error: bool, args: dict[str, Any]) -> None:
+        self.tool_calls += 1
+        self.tool_errors += int(bool(is_error))
+        self.per_tool[name] = self.per_tool.get(name, 0) + 1
+        case_path = args.get("case_path") if isinstance(args, dict) else None
+        if isinstance(case_path, str) and case_path not in self.case_paths:
+            self.case_paths.append(case_path)
+
+    def finish(self, reason: str) -> None:
+        self.stop_reason = reason
+        self.finished_at = _time.time()
+
+    def to_dict(self) -> dict[str, Any]:
+        end = self.finished_at or _time.time()
+        return {
+            "backend": self.backend,
+            "base_url": self.base_url,
+            "model": self.model,
+            "prompt": self.prompt,
+            "wall_clock_s": round(end - self.started_at, 3),
+            "iterations": self.iterations,
+            "stop_reason": self.stop_reason,
+            "input_tokens": self.input_tokens,
+            "output_tokens": self.output_tokens,
+            "cache_read_tokens": self.cache_read_tokens,
+            "cache_write_tokens": self.cache_write_tokens,
+            "tool_calls": self.tool_calls,
+            "tool_errors": self.tool_errors,
+            "per_tool": dict(sorted(self.per_tool.items())),
+            "case_paths": self.case_paths,
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -209,110 +347,6 @@ def _normalize_case_path(
     return f"corrected case_path {given!r} -> {canonical}"
 
 
-def _closest_tool_name(
-    garbled: str, route: dict[str, tuple[str, str]]
-) -> str | None:
-    """Snap a corrupted tool *name* back to the real one.
-
-    Weak local models corrupt the tool name itself, not just its
-    arguments (observed: ``"openfoam__copy_tpatch?"`` for
-    ``copy_tutorial_dict``, ``"open..??"``). When exactly one known tool
-    is a clear closest match we can route the call correctly; when the
-    corruption is too severe to disambiguate (``"open..??"`` matches
-    nothing well) we return ``None`` and let the caller report an
-    unknown-tool error rather than dispatch to a guessed tool.
-    """
-    matches = difflib.get_close_matches(garbled, list(route), n=2, cutoff=0.6)
-    if not matches:
-        return None
-    best = matches[0]
-    if len(matches) > 1:
-        # Require the winner to be clearly ahead of the runner-up so an
-        # ambiguous garble never silently dispatches to the wrong tool.
-        r_best = difflib.SequenceMatcher(None, garbled, best).ratio()
-        r_next = difflib.SequenceMatcher(None, garbled, matches[1]).ratio()
-        if r_best - r_next < 0.1:
-            return None
-    return best
-
-
-def _unwrap_tool_envelope(args: dict[str, Any]) -> dict[str, Any]:
-    """Unwrap an OpenAI tool-call envelope a model echoed INTO its arguments.
-
-    Some weak models emit ``{"name": "<tool>", "arguments": "{...}"}`` as the
-    *arguments* of an already-named tool call — the call envelope nested one
-    level too deep (the inner ``arguments`` is usually a JSON string). Detect
-    that exact shape and return the inner argument dict so the real call goes
-    through; otherwise return ``args`` unchanged.
-    """
-    if not isinstance(args, dict) or "arguments" not in args:
-        return args
-    if not set(args) <= {"name", "arguments", "parameters"}:
-        return args
-    inner = args.get("arguments", args.get("parameters"))
-    if isinstance(inner, str):
-        try:
-            inner = json.loads(inner)
-        except json.JSONDecodeError:
-            return args
-    return inner if isinstance(inner, dict) else args
-
-
-def _backfill_record_step(args: dict[str, Any]) -> list[str]:
-    """Fill in ``record_step``'s required fields when a weak model omits them.
-
-    ``record_step`` is optional narration, but ``phase`` / ``status`` /
-    ``title`` have no defaults, so a single omission triggers a hard schema
-    rejection that derails the run (observed: a model that supplies rich
-    ``decision`` / ``why`` fields but drops ``title``, then loops on the
-    error). The narration is worth keeping when the model did supply the
-    reasoning, so synthesize the missing scaffolding rather than fail.
-
-    Mutates ``args`` in place. Returns one note per field filled.
-    """
-    if not isinstance(args, dict):
-        return []
-    notes: list[str] = []
-    if not args.get("status"):
-        args["status"] = "info"
-        notes.append("filled record_step status='info'")
-    if not args.get("phase"):
-        args["phase"] = "note"
-        notes.append("filled record_step phase='note'")
-    if not str(args.get("title") or "").strip():
-        seed = str(args.get("decision") or args.get("phase") or "progress note").strip()
-        args["title"] = seed[:80] or "progress note"
-        notes.append(f"filled record_step title={args['title']!r}")
-    return notes
-
-
-def _repair_unknown_kwargs(args: dict[str, Any], allowed: set[str]) -> list[str]:
-    """Rename or drop argument keys the tool's schema doesn't define.
-
-    Weak local models invent slightly-wrong keyword names (observed:
-    ``retries_of`` for ``retry_of``). FastMCP validates strictly and
-    rejects the *entire* call on a single unexpected keyword, so a
-    one-character slip wastes a whole turn. When an unknown key clearly
-    matches exactly one real parameter we rename it; otherwise we drop it,
-    so a genuinely missing required argument surfaces as a clean
-    missing-argument error instead of an opaque unexpected-keyword one.
-
-    Mutates ``args`` in place. Returns one note per repair (for the log).
-    """
-    if not allowed or not isinstance(args, dict):
-        return []
-    notes: list[str] = []
-    for key in [k for k in args if k not in allowed]:
-        match = difflib.get_close_matches(key, sorted(allowed), n=1, cutoff=0.72)
-        if match and match[0] not in args:
-            args[match[0]] = args.pop(key)
-            notes.append(f"renamed arg {key!r} -> {match[0]!r}")
-        else:
-            args.pop(key)
-            notes.append(f"dropped unknown arg {key!r}")
-    return notes
-
-
 async def call_tool(
     sessions: dict[str, ClientSession],
     route: dict[str, tuple[str, str]],
@@ -320,7 +354,6 @@ async def call_tool(
     args: dict[str, Any],
     tools_with_case_path: set[str] | None = None,
     known_case_paths: list[str] | None = None,
-    tool_arg_names: dict[str, set[str]] | None = None,
 ) -> tuple[str, bool]:
     """Invoke a tool via the appropriate MCP session.
 
@@ -329,81 +362,21 @@ async def call_tool(
     servers in this repo all return either JSON-serializable dicts or
     short strings, so this is sufficient.
 
-    Before dispatch, several repairs guard against the garbage weak local
-    models feed into tool calls: a corrupted tool *name* is snapped back to
-    the nearest real tool, ``case_path`` is snapped back to the pre-created
-    case directory, argument keys the schema doesn't define are renamed or
-    dropped (a one-character slip like ``retries_of`` no longer fails the
-    whole call), and a ``write_dict`` call carrying empty / placeholder
-    ``content`` (or record_step's arguments by mistake) is bounced back with
-    a corrective error instead of writing a junk file. A frontier model
-    never trips these, so they are inert on the Anthropic backend.
+    Before dispatch, two repairs guard against the garbage weak local
+    models feed into tool arguments: ``case_path`` is snapped back to the
+    pre-created case directory, and a ``write_dict`` call carrying empty /
+    placeholder ``content`` (or record_step's arguments by mistake) is
+    bounced back with a corrective error instead of writing a junk file.
     """
     if prefixed_name not in route:
-        repaired = _closest_tool_name(prefixed_name, route)
-        if repaired is None:
-            return (f"Error: unknown tool '{prefixed_name}'", True)
-        print(
-            f"[harness] corrected tool name {prefixed_name!r} -> {repaired}",
-            file=sys.stderr,
-        )
-        prefixed_name = repaired
+        return (f"Error: unknown tool '{prefixed_name}'", True)
     server, raw_name = route[prefixed_name]
-
-    # Unwrap a tool-call envelope the model nested into its own arguments
-    # before anything reads the (otherwise nested) real arguments.
-    unwrapped = _unwrap_tool_envelope(args)
-    if unwrapped is not args:
-        print("[harness] unwrapped nested tool-call envelope from arguments", file=sys.stderr)
-        args = unwrapped
 
     note = _normalize_case_path(
         prefixed_name, args, tools_with_case_path or set(), known_case_paths or []
     )
     if note is not None:
         print(f"[harness] {note}", file=sys.stderr)
-
-    if tool_arg_names is not None:
-        for kw_note in _repair_unknown_kwargs(
-            args, tool_arg_names.get(prefixed_name, set())
-        ):
-            print(f"[harness] {kw_note}", file=sys.stderr)
-
-    # record_step is optional narration; never let a missing required field
-    # hard-fail it and derail the run. Backfill phase/status/title.
-    if raw_name == "record_step":
-        for rs_note in _backfill_record_step(args):
-            print(f"[harness] {rs_note}", file=sys.stderr)
-
-    # Once the run's case directory holds authored files, a ``prepare_case``
-    # on it is never the right move: with ``overwrite=False`` the tool
-    # refuses (non-empty dir) and weak models misread that refusal as a hard
-    # block and abandon the run; with ``overwrite=True`` it would ``rmtree``
-    # every dict and the mesh authored so far. Intercept the non-empty case
-    # with a guiding no-op pointing back at the productive path — overwrite
-    # the one bad file in place. An *empty* pre-created dir falls through so
-    # the normal first-call ``prepare_case`` (the Anthropic workflow opens
-    # with one) still runs.
-    if raw_name == "prepare_case" and args.get("case_path") in (known_case_paths or []):
-        case_dir = Path(args["case_path"])
-        if case_dir.is_dir() and any(case_dir.iterdir()):
-            print("[harness] intercepted prepare_case on the run's non-empty case dir", file=sys.stderr)
-            return (
-                json.dumps(
-                    {
-                        "success": True,
-                        "note": (
-                            "The case directory already exists and holds your authored "
-                            "files — you do not need prepare_case. To fix a file you got "
-                            "wrong, call write_dict or copy_tutorial_dict again with the "
-                            "same dict_name; it overwrites in place. Do NOT clear or "
-                            "recreate the directory and do NOT abandon the run over "
-                            "leftover files — just re-author the offending dict and re-run."
-                        ),
-                    }
-                ),
-                False,
-            )
 
     if raw_name == "write_dict":
         if not args.get("content") and any(
@@ -477,29 +450,34 @@ async def run_anthropic(
     max_iters: int,
     tools_with_case_path: set[str],
     known_case_paths: list[str],
-    tool_arg_names: dict[str, set[str]],
+    ledger: RunLedger | None = None,
+    client: Any | None = None,
+    max_tokens: int = MAX_RESPONSE_TOKENS,
 ) -> None:
     """Drive the agent loop against Anthropic's tool-use API."""
-    try:
-        import anthropic
-    except ImportError as exc:
-        sys.exit(
-            "anthropic SDK not installed. Run `uv sync` from the repo root "
-            "or install with `uv add anthropic`. (" + str(exc) + ")"
-        )
-
-    client = anthropic.AsyncAnthropic()
+    if client is None:
+        try:
+            import anthropic
+        except ImportError as exc:
+            sys.exit(
+                "anthropic SDK not installed. Run `uv sync` from the repo root "
+                "or install with `uv add anthropic`. (" + str(exc) + ")"
+            )
+        client = anthropic.AsyncAnthropic()
     anthropic_tools = to_anthropic_tools(tools)
     messages: list[dict[str, Any]] = [{"role": "user", "content": user_prompt}]
 
     for iteration in range(max_iters):
         response = await client.messages.create(
             model=model,
-            max_tokens=4096,
+            max_tokens=max_tokens,
             system=system_prompt,
             tools=anthropic_tools,
             messages=messages,
         )
+        if ledger is not None:
+            ledger.iterations = iteration + 1
+            ledger.record_usage(getattr(response, "usage", None))
 
         assistant_blocks: list[dict[str, Any]] = []
         tool_uses: list[Any] = []
@@ -519,8 +497,29 @@ async def run_anthropic(
                 tool_uses.append(block)
         messages.append({"role": "assistant", "content": assistant_blocks})
 
-        if response.stop_reason == "end_turn" or not tool_uses:
+        # A max_tokens stop is a truncation, not an answer: the model was
+        # cut off mid-response, usually partway through a long dictionary.
+        # Treating it as completion ends the run silently with the case
+        # half-authored, so ask for the rest instead.
+        if response.stop_reason == "max_tokens" and not tool_uses:
+            print("[harness] response hit the output cap; asking for the rest.")
+            messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        "Your previous response was cut off at the output limit. "
+                        "Continue from where you stopped. If you were writing a "
+                        "dictionary, re-issue the tool call with the complete "
+                        "content — do not abbreviate or elide any part of it."
+                    ),
+                }
+            )
+            continue
+
+        if not tool_uses:
             print(f"\n[harness] done after {iteration + 1} iteration(s).")
+            if ledger is not None:
+                ledger.finish(str(response.stop_reason or "end_turn"))
             return
 
         tool_results: list[dict[str, Any]] = []
@@ -528,7 +527,7 @@ async def run_anthropic(
             print(f"[tool] {tu.name}({json.dumps(tu.input)[:120]}...)")
             content, is_error = await call_tool(
                 sessions, route, tu.name, tu.input,
-                tools_with_case_path, known_case_paths, tool_arg_names,
+                tools_with_case_path, known_case_paths,
             )
             entry: dict[str, Any] = {
                 "type": "tool_result",
@@ -537,10 +536,14 @@ async def run_anthropic(
             }
             if is_error:
                 entry["is_error"] = True
+            if ledger is not None:
+                ledger.record_tool(tu.name, is_error, tu.input)
             tool_results.append(entry)
         messages.append({"role": "user", "content": tool_results})
 
     print(f"\n[harness] hit max-iters ({max_iters}); stopping.")
+    if ledger is not None:
+        ledger.finish("max_iters")
 
 
 # ---------------------------------------------------------------------------
@@ -683,20 +686,21 @@ def _extract_inline_tool_calls(
     return calls
 
 
-async def run_ollama(
+async def run_openai_compatible(
     sessions: dict[str, ClientSession],
     tools: list[dict[str, Any]],
     route: dict[str, tuple[str, str]],
     model: str,
     base_url: str,
+    api_key: str,
     system_prompt: str,
     user_prompt: str,
     max_iters: int,
     tools_with_case_path: set[str],
     known_case_paths: list[str],
-    tool_arg_names: dict[str, set[str]],
+    ledger: RunLedger | None = None,
 ) -> None:
-    """Drive the agent loop against Ollama's OpenAI-compatible API."""
+    """Drive the agent loop against any OpenAI-compatible chat API."""
     try:
         from openai import AsyncOpenAI
     except ImportError as exc:
@@ -705,28 +709,15 @@ async def run_ollama(
             "or install with `uv add openai`. (" + str(exc) + ")"
         )
 
-    # Ollama requires a non-empty api_key field even though it ignores
-    # the value. "ollama" is the conventional placeholder.
-    client = AsyncOpenAI(base_url=base_url, api_key="ollama")
+    # Ollama ignores the key but requires the field to be non-empty; vLLM
+    # may enforce a real one. The caller resolves which to send.
+    client = AsyncOpenAI(base_url=base_url, api_key=api_key)
     openai_tools = to_openai_tools(tools)
     valid_tool_names: set[str] = {t["name"] for t in tools}
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
     ]
-
-    # Consecutive non-productive turns (rejected/garbled tool call or an
-    # empty final channel). Reset to 0 the moment the model emits a real
-    # tool call. Bounds an otherwise-silent spin if the model wedges.
-    stalls = 0
-
-    # Has the solver completed a successful run yet? Weak models tend to
-    # "finish" with a prose summary while the solver is still erroring on a
-    # dictionary, so we refuse to accept a final answer until at least one
-    # ``run_solver`` has succeeded. A successful run is the only result that
-    # carries ``walltime_s`` (failures return just reason + log_tail), which
-    # makes this signal independent of the possibly-garbled tool name.
-    solver_ran_ok = False
 
     for iteration in range(max_iters):
         try:
@@ -736,6 +727,9 @@ async def run_ollama(
                 tools=openai_tools,
                 max_tokens=16384,
             )
+            if ledger is not None:
+                ledger.iterations = iteration + 1
+                ledger.record_usage(getattr(response, "usage", None))
         except Exception as exc:
             # Ollama returns HTTP 500 with a tool-call-parse error when the
             # model emits garbage in the tool_calls slot ("error parsing tool
@@ -743,14 +737,7 @@ async def run_ollama(
             # rather than aborting the whole run.
             err_text = str(exc)
             if "error parsing tool call" in err_text or "InternalServerError" in type(exc).__name__:
-                stalls += 1
-                print(
-                    f"[harness] Ollama rejected the model's tool call "
-                    f"({stalls}/{MAX_CONSECUTIVE_STALLS}): {err_text[:200]}"
-                )
-                if stalls >= MAX_CONSECUTIVE_STALLS:
-                    print(f"\n[harness] {stalls} non-productive turns in a row; stopping.")
-                    return
+                print(f"[harness] Ollama rejected the model's tool call: {err_text[:200]}")
                 messages.append(
                     {
                         "role": "user",
@@ -813,14 +800,7 @@ async def run_ollama(
             # In the latter case, push a corrective message and let it
             # try again instead of silently terminating mid-task.
             if _looks_like_attempted_tool_call(msg.content or ""):
-                stalls += 1
-                print(
-                    "[harness] content looks like an attempted tool call but didn't "
-                    f"parse ({stalls}/{MAX_CONSECUTIVE_STALLS}) — sending corrective message."
-                )
-                if stalls >= MAX_CONSECUTIVE_STALLS:
-                    print(f"\n[harness] {stalls} non-productive turns in a row; stopping.")
-                    return
+                print("[harness] content looks like an attempted tool call but didn't parse — sending corrective message.")
                 messages.append(
                     {
                         "role": "user",
@@ -837,22 +817,11 @@ async def run_ollama(
                     }
                 )
                 continue
-            # Empty response: the model emitted neither a tool call nor any
-            # final-answer text. This is the dominant outcome for a reasoning
-            # model like gpt-oss, which routinely spends a whole turn in its
-            # reasoning channel and returns an empty final channel — and it
-            # does so with finish_reason "length", "stop", OR None. An empty
-            # turn is never task completion, so nudge regardless of the
-            # finish_reason rather than mistaking the silence for "done".
-            if not (msg.content or "").strip():
-                stalls += 1
-                print(
-                    f"[harness] empty response (finish_reason={finish_reason}); nudging "
-                    f"the model to continue ({stalls}/{MAX_CONSECUTIVE_STALLS})."
-                )
-                if stalls >= MAX_CONSECUTIVE_STALLS:
-                    print(f"\n[harness] {stalls} empty turns in a row; stopping.")
-                    return
+            # Truly empty response: model emitted neither tool_calls nor
+            # final-answer text. Most common with reasoning models that
+            # hit the token cap during internal reasoning. Nudge them.
+            if not (msg.content or "").strip() and finish_reason in ("length", "stop"):
+                print(f"[harness] empty response (finish_reason={finish_reason}); nudging the model to continue.")
                 messages.append(
                     {
                         "role": "user",
@@ -864,41 +833,11 @@ async def run_ollama(
                     }
                 )
                 continue
-            # Real final-answer prose with no tool call. Only accept it as
-            # "done" once the solver has actually run — otherwise a weak model
-            # ends the run with a plan/summary while the case is still failing
-            # to solve (observed: it narrates "rerun simpleFoam" instead of
-            # calling run_solver). Nudge it back to executing the fix.
-            if not solver_ran_ok:
-                stalls += 1
-                print(
-                    "[harness] model tried to finish but the solver has not run "
-                    f"successfully yet ({stalls}/{MAX_CONSECUTIVE_STALLS}); nudging to continue."
-                )
-                if stalls >= MAX_CONSECUTIVE_STALLS:
-                    print(f"\n[harness] {stalls} non-productive turns in a row; stopping.")
-                    return
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": (
-                            "You are NOT done: the solver has not completed a successful "
-                            "run yet. Do not stop and do not just describe what to do — "
-                            "DO it. Read the most recent run_solver error (its log_tail "
-                            "names the dictionary and line at fault), fix that file in "
-                            "place by calling write_dict or copy_tutorial_dict, then call "
-                            "run_solver again. Only once the solver runs to a converged "
-                            "result should you move on to validation."
-                        ),
-                    }
-                )
-                continue
             print(f"\n[harness] done after {iteration + 1} iteration(s). (finish_reason={finish_reason})")
+            if ledger is not None:
+                ledger.finish(str(finish_reason or "stop"))
             return
 
-        # The model emitted at least one real tool call — forward progress,
-        # so the stall streak is broken.
-        stalls = 0
         for c in normalized_calls:
             args = c["arguments"]
             if isinstance(args, dict) and "__parse_error__" in args:
@@ -906,15 +845,17 @@ async def run_ollama(
                 messages.append({"role": "tool", "tool_call_id": c["id"], "content": err})
                 continue
             print(f"[tool] {c['name']}({json.dumps(args)[:120]}...)")
-            content, _is_error = await call_tool(
+            content, is_error = await call_tool(
                 sessions, route, c["name"], args,
-                tools_with_case_path, known_case_paths, tool_arg_names,
+                tools_with_case_path, known_case_paths,
             )
-            if '"walltime_s"' in content:
-                solver_ran_ok = True
+            if ledger is not None:
+                ledger.record_tool(c["name"], is_error, args)
             messages.append({"role": "tool", "tool_call_id": c["id"], "content": content})
 
     print(f"\n[harness] hit max-iters ({max_iters}); stopping.")
+    if ledger is not None:
+        ledger.finish("max_iters")
 
 
 # ---------------------------------------------------------------------------
@@ -929,17 +870,22 @@ def load_system_prompt(
 ) -> str:
     """Read the system prompt.
 
-    Defaults differ by backend: Anthropic gets the full CLAUDE.md
-    workflow contract (~600 lines, designed for frontier models);
-    Ollama gets the slim ``scripts/local_system_prompt.md`` because
-    local 20–30B models lose the thread under the full contract.
-    Pass ``--system-prompt-file`` to override.
+    Defaults differ by backend family, not vendor: Anthropic gets the full
+    CLAUDE.md workflow contract (~600 lines, written for frontier models),
+    and every OpenAI-compatible endpoint gets the slim
+    ``scripts/local_system_prompt.md``, because the models usually served
+    that way lose the thread under the full contract.
+
+    That default is about model capability rather than which server is in
+    front of it, so a large model behind vLLM should be given the full
+    contract with ``--system-prompt-file CLAUDE.md``.
     """
     if override_path is not None:
         if not override_path.is_file():
             sys.exit(f"--system-prompt-file {override_path} does not exist.")
         return override_path.read_text(encoding="utf-8")
-    if backend == "ollama":
+    family, _, _ = resolve_backend(backend)
+    if family == "openai":
         slim = repo_root / "scripts" / "local_system_prompt.md"
         if slim.is_file():
             return slim.read_text(encoding="utf-8")
@@ -964,6 +910,34 @@ async def amain(args: argparse.Namespace) -> None:
     if user_prompt != args.prompt:
         print("[harness] inlined referenced scenario YAML(s) into the prompt.", file=sys.stderr)
 
+    ledger = RunLedger(
+        backend=args.backend,
+        model=args.model,
+        prompt=args.prompt,
+    )
+    ledger.base_url = args.base_url
+
+    try:
+        await _drive(args, mcp_config, system_prompt, user_prompt, known_case_paths, ledger)
+    finally:
+        if getattr(args, "run_summary", None):
+            # Written in a finally block: a run that dies on an API error or
+            # a timeout still cost something, and losing the tally would
+            # make the failure look free.
+            args.run_summary.parent.mkdir(parents=True, exist_ok=True)
+            args.run_summary.write_text(json.dumps(ledger.to_dict(), indent=2) + "\n")
+            print(f"[harness] run summary → {args.run_summary}", file=sys.stderr)
+
+
+async def _drive(
+    args: argparse.Namespace,
+    mcp_config: dict[str, Any],
+    system_prompt: str,
+    user_prompt: str,
+    known_case_paths: list[str],
+    ledger: RunLedger,
+) -> None:
+    """Connect the servers and run the agent loop on the chosen backend."""
     async with AsyncExitStack() as stack:
         sessions = await connect_servers(mcp_config, stack)
         tools, route = await gather_tools(sessions)
@@ -972,59 +946,91 @@ async def amain(args: argparse.Namespace) -> None:
             file=sys.stderr,
         )
 
-        # Per-tool argument-name maps, both derived from the schemas the
-        # servers advertise (no hardcoded lists): which tools take a
-        # ``case_path`` (for path auto-correction), and the full set of
-        # valid argument names per tool (for unknown-kwarg repair).
+        # Tools that accept a ``case_path`` argument — derived from each
+        # tool's input schema so the case_path auto-correction tracks the
+        # servers without a hardcoded list.
         tools_with_case_path = {
             t["name"]
             for t in tools
             if "case_path" in ((t["input_schema"] or {}).get("properties") or {})
         }
-        tool_arg_names = {
-            t["name"]: set(((t["input_schema"] or {}).get("properties") or {}).keys())
-            for t in tools
-        }
 
-        # A frontier model lands a clean call almost every turn; a local
-        # 20–30B model wastes many turns on garbled calls, so it gets a
-        # larger budget. An explicit --max-iters overrides either default.
-        if args.max_iters is not None:
-            max_iters = args.max_iters
-        elif args.backend == "ollama":
-            max_iters = DEFAULT_OLLAMA_MAX_ITERS
-        else:
-            max_iters = DEFAULT_ANTHROPIC_MAX_ITERS
-
-        if args.backend == "anthropic":
+        family, _, _ = resolve_backend(args.backend)
+        if family == "anthropic":
             await run_anthropic(
                 sessions=sessions,
                 tools=tools,
                 route=route,
-                model=args.model or DEFAULT_ANTHROPIC_MODEL,
+                model=args.model,
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
-                max_iters=max_iters,
+                max_iters=args.max_iters,
                 tools_with_case_path=tools_with_case_path,
                 known_case_paths=known_case_paths,
-                tool_arg_names=tool_arg_names,
+                ledger=ledger,
             )
-        elif args.backend == "ollama":
-            await run_ollama(
+        else:
+            await run_openai_compatible(
                 sessions=sessions,
                 tools=tools,
                 route=route,
-                model=args.model or DEFAULT_OLLAMA_MODEL,
-                base_url=args.ollama_base_url,
+                model=args.model,
+                base_url=args.base_url,
+                api_key=args.api_key,
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
-                max_iters=max_iters,
+                max_iters=args.max_iters,
                 tools_with_case_path=tools_with_case_path,
                 known_case_paths=known_case_paths,
-                tool_arg_names=tool_arg_names,
+                ledger=ledger,
             )
-        else:
-            sys.exit(f"Unknown backend: {args.backend}")
+
+
+def _resolve_runtime(args: argparse.Namespace) -> None:
+    """Settle endpoint, key, and model before anything connects.
+
+    Resolved up front so a misconfigured run fails in a sentence rather
+    than after four MCP servers have started.
+    """
+    family, default_base_url, default_model = resolve_backend(args.backend)
+
+    if family == "anthropic":
+        args.base_url = None
+        args.api_key = None
+        args.model = args.model or default_model
+        if not os.environ.get("ANTHROPIC_API_KEY"):
+            sys.exit(
+                "ANTHROPIC_API_KEY is not set. Either export it, or point "
+                "--backend at a local OpenAI-compatible server "
+                "(ollama / vllm / lmstudio)."
+            )
+        return
+
+    args.base_url = (
+        args.base_url
+        or os.environ.get("OPENAI_BASE_URL")
+        or os.environ.get("OLLAMA_BASE_URL")
+        or default_base_url
+    )
+    if not args.base_url:
+        sys.exit(
+            f"--backend {args.backend} needs an endpoint: pass --base-url or "
+            "set $OPENAI_BASE_URL."
+        )
+    # Ollama ignores the key but rejects an empty field, so a placeholder is
+    # the working default when no key is configured.
+    args.api_key = os.environ.get(args.api_key_env) or "local"
+
+    args.model = args.model or default_model
+    if not args.model:
+        args.model = discover_model(args.base_url, args.api_key)
+        if args.model:
+            print(f"[harness] serving model: {args.model}", file=sys.stderr)
+    if not args.model:
+        sys.exit(
+            f"No model given and {args.base_url} did not answer /models. "
+            "Pass --model explicitly."
+        )
 
 
 def main() -> None:
@@ -1034,10 +1040,15 @@ def main() -> None:
     )
     parser.add_argument(
         "--backend",
-        choices=["anthropic", "ollama"],
+        choices=sorted(BACKENDS),
         required=True,
-        help="Agent runtime. 'anthropic' uses ANTHROPIC_API_KEY; "
-        "'ollama' uses a local Ollama instance.",
+        help=(
+            "Agent runtime. 'anthropic' uses ANTHROPIC_API_KEY. Every other "
+            "choice speaks the OpenAI chat-completions API and differs only "
+            "in its default endpoint: 'ollama' (localhost:11434), 'vllm' "
+            "(localhost:8000), 'lmstudio' (localhost:1234), or 'openai' with "
+            "an explicit --base-url for anything else."
+        ),
     )
     parser.add_argument(
         "--prompt",
@@ -1053,11 +1064,8 @@ def main() -> None:
     parser.add_argument(
         "--max-iters",
         type=int,
-        default=None,
-        help="Hard cap on agent iterations (each iteration = one model call + any "
-        f"tool calls). Default depends on backend: {DEFAULT_ANTHROPIC_MAX_ITERS} "
-        f"for anthropic, {DEFAULT_OLLAMA_MAX_ITERS} for ollama (which wastes more "
-        "turns on garbled tool calls).",
+        default=50,
+        help="Hard cap on agent iterations (each iteration = one model call + any tool calls).",
     )
     parser.add_argument(
         "--mcp-config",
@@ -1066,9 +1074,36 @@ def main() -> None:
         help="Path to an MCP config file. Defaults to .mcp.json at the repo root.",
     )
     parser.add_argument(
+        "--base-url",
+        default=None,
+        help=(
+            "OpenAI-compatible API endpoint. Defaults to the chosen backend's "
+            "conventional port, or $OPENAI_BASE_URL / $OLLAMA_BASE_URL."
+        ),
+    )
+    parser.add_argument(
         "--ollama-base-url",
-        default=os.environ.get("OLLAMA_BASE_URL", DEFAULT_OLLAMA_BASE_URL),
-        help=f"Ollama OpenAI-compatible API endpoint. Default: {DEFAULT_OLLAMA_BASE_URL}.",
+        dest="base_url",
+        help="Deprecated alias for --base-url.",
+    )
+    parser.add_argument(
+        "--api-key-env",
+        default="OPENAI_API_KEY",
+        help=(
+            "Environment variable holding the API key for an OpenAI-compatible "
+            "endpoint. Ollama ignores the value but needs the field non-empty; "
+            "a vLLM server started with --api-key enforces it."
+        ),
+    )
+    parser.add_argument(
+        "--run-summary",
+        type=Path,
+        default=None,
+        help=(
+            "Write a JSON tally of the run (iterations, tool calls, tokens, "
+            "wall-clock) to this path. What the evaluation harness reads to "
+            "put a measured cost on a run."
+        ),
     )
     parser.add_argument(
         "--system-prompt-file",
@@ -1082,11 +1117,7 @@ def main() -> None:
     )
 
     args = parser.parse_args()
-
-    if args.backend == "anthropic" and not os.environ.get("ANTHROPIC_API_KEY"):
-        sys.exit(
-            "ANTHROPIC_API_KEY is not set. Either export it or use --backend ollama."
-        )
+    _resolve_runtime(args)
 
     try:
         asyncio.run(amain(args))

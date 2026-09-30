@@ -30,6 +30,10 @@ from consultant_mcp.assessments import (
     ResidualVerdict,
     YPlusVerdict,
     aggregate_verdict,
+    DEFAULT_MESH_THRESHOLDS,
+    DEFAULT_RESIDUAL_THRESHOLDS,
+    MeshThresholds,
+    ResidualThresholds,
     assess_aspect_ratio,
     assess_non_orthogonality,
     assess_residual_pattern,
@@ -111,7 +115,9 @@ def _parse_check_mesh_log(log_text: str) -> dict[str, Any]:
     return metrics
 
 
-def assess_mesh_quality(case_path: str) -> ToolResult:
+def assess_mesh_quality(
+    case_path: str, thresholds: MeshThresholds | None = None
+) -> ToolResult:
     """Interpret checkMesh metrics in CFD-domain language.
 
     Reads ``<case_path>/log.checkMesh`` (written by the OpenFOAM
@@ -184,12 +190,17 @@ def assess_mesh_quality(case_path: str) -> ToolResult:
 
     parsed = _parse_check_mesh_log(log_text)
     n_cells = parsed["n_cells"]
+    # `thresholds` is not part of the MCP surface an agent sees — it stays
+    # at the shipped defaults for every ordinary call. It exists so a study
+    # can move the operating point and still get its verdicts from this
+    # function rather than from a copy of it.
+    bands = thresholds or DEFAULT_MESH_THRESHOLDS
     verdicts: list[MetricVerdict] = [
-        assess_non_orthogonality(parsed["max_non_orthogonality"]),
-        assess_skewness(parsed["max_skewness"]),
-        assess_aspect_ratio(parsed["max_aspect_ratio"]),
+        assess_non_orthogonality(parsed["max_non_orthogonality"], bands),
+        assess_skewness(parsed["max_skewness"], bands),
+        assess_aspect_ratio(parsed["max_aspect_ratio"], bands),
         assess_severe_non_orthogonal(
-            parsed["severe_non_orthogonal_faces"], n_cells
+            parsed["severe_non_orthogonal_faces"], n_cells, bands
         ),
     ]
     overall = aggregate_verdict(verdicts)
@@ -411,6 +422,7 @@ def assess_residuals(
     threshold: float = 1e-5,
     window: int = 50,
     log_path: str | None = None,
+    bands: ResidualThresholds | None = None,
 ) -> ToolResult:
     """Classify the convergence pattern of each field's residual history.
 
@@ -489,8 +501,14 @@ def assess_residuals(
             ),
         }
 
+    # Not part of the MCP surface an agent sees — it stays at the shipped
+    # bands for every ordinary call, and exists so a study can move the
+    # operating point without re-implementing the classifier.
     verdicts: list[ResidualVerdict] = [
-        assess_residual_pattern(field, history, threshold, window)
+        assess_residual_pattern(
+            field, history, threshold, window,
+            bands or DEFAULT_RESIDUAL_THRESHOLDS,
+        )
         for field, history in sorted(histories.items())
     ]
     overall = aggregate_verdict(verdicts)
@@ -965,6 +983,7 @@ def draft_annotation_from_report(
     case_path: str,
     tutorial_path: str,
     overwrite: bool = False,
+    corpus_subpath: str | None = None,
     solver: str | None = None,
     physics: str | None = None,
     geometry: str | None = None,
@@ -994,7 +1013,13 @@ def draft_annotation_from_report(
     ``<name>.draft.md`` → ``<name>.md``.
 
     The draft path is constructed as
-    ``<repo>/corpus/<tutorial_path>.draft.md``. The
+    ``<repo>/corpus/<tutorial_path>.draft.md`` by default. Pass
+    ``corpus_subpath`` to file the draft elsewhere — e.g. under a
+    case-family subfolder keyed by experiment — while ``tutorial_path``
+    stays the real template recorded in the frontmatter. This decouples
+    *where the entry lives* from *which tutorial it derived from*, which
+    matters when several experiments share one template (a
+    one-file-per-tutorial layout would otherwise collide). The
     ``.draft.md`` suffix means ``get_tutorial_annotation`` will not pick
     it up (it looks for ``<name>.md`` exactly), so partial work in the
     corpus directory is safe.
@@ -1007,6 +1032,13 @@ def draft_annotation_from_report(
             Determines where the draft is written.
         overwrite: When ``False`` (default), refuse to overwrite an
             existing draft. Set ``True`` to replace it.
+        corpus_subpath: Optional path under ``corpus/`` (without the
+            ``.md`` suffix) that overrides where the draft is written —
+            e.g. ``"compressible/rhoCentralFoam/supersonic-half-cones/
+            structured-body-fitted"`` to file an entry by experiment
+            under a family subfolder. When omitted, the draft is filed at
+            ``tutorial_path`` as before. ``tutorial_path`` is unaffected
+            either way: it is the template recorded in the frontmatter.
         solver: One-line solver descriptor (e.g. the application used and
             any steady/transient swap). Generalise to the tutorial, not
             the specific run.
@@ -1027,8 +1059,9 @@ def draft_annotation_from_report(
         as a parallel file, so the human can merge if appropriate.
         On failure: ``{"success": False, "reason": str, "detail": str}``.
         ``reason`` is one of ``"invalid_case_path"``, ``"report_not_found"``,
-        ``"invalid_tutorial_path"``, ``"no_decisions_found"``,
-        ``"draft_already_exists"``, ``"root_not_found"``, ``"write_failed"``.
+        ``"invalid_tutorial_path"``, ``"invalid_corpus_subpath"``,
+        ``"no_decisions_found"``, ``"draft_already_exists"``,
+        ``"root_not_found"``, ``"write_failed"``.
     """
     case = Path(case_path)
     if not case.is_dir():
@@ -1057,6 +1090,28 @@ def draft_annotation_from_report(
             "detail": "tutorial_path must be a non-empty string",
         }
 
+    # Where the draft is filed. Defaults to tutorial_clean (one file per
+    # tutorial); corpus_subpath overrides it so a case family can be filed
+    # by experiment while tutorial_clean stays the template in frontmatter.
+    if corpus_subpath is not None:
+        location_key = corpus_subpath.strip().strip("/")
+        for suffix in (".draft.md", ".md"):
+            if location_key.endswith(suffix):
+                location_key = location_key[: -len(suffix)]
+                break
+        if not location_key or ".." in location_key.split("/"):
+            return {
+                "success": False,
+                "reason": "invalid_corpus_subpath",
+                "detail": (
+                    "corpus_subpath must be a non-empty path under corpus/ "
+                    "with no '..' segments, e.g. 'compressible/rhoCentralFoam/"
+                    "supersonic-half-cones/structured-body-fitted'"
+                ),
+            }
+    else:
+        location_key = tutorial_clean
+
     report_text = report.read_text(encoding="utf-8", errors="replace")
     entries = _parse_report_entries(report_text)
     if not entries:
@@ -1082,7 +1137,7 @@ def draft_annotation_from_report(
             "detail": str(exc),
         }
 
-    live_path = annotation_path_for(tutorial_clean, root=repo_root)
+    live_path = annotation_path_for(location_key, root=repo_root)
     annotation_exists = live_path.is_file()
     draft_path = live_path.with_name(live_path.stem + ".draft.md")
 

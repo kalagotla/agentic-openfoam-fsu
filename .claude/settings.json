@@ -1,12 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "mcp__openfoam__list_tutorials",
-      "mcp__openfoam__read_tutorial_file",
-      "mcp__openfoam__write_dict",
-      "mcp__openfoam__run_blockmesh",
-      "mcp__openfoam__run_solver",
-      "mcp__openfoam__get_residuals",
+      "mcp__openfoam",
+      "mcp__validation",
+      "mcp__consultant",
+      "mcp__research_assistant",
       "Bash(python3 *)"
     ]
   },

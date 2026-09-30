@@ -93,3 +93,16 @@ badFaces
 illegalFaces
 *_normal_*.obj
 *.vtp
+
+# Evaluation runs: one directory per run (case, logs, record.json). Only the
+# aggregated tables are committed, never the raw matrix output.
+scripts/eval/results/
+
+# Per-machine local-model choice, written by scripts/local-model.sh.
+.kilo/kilo.jsonc
+.local-model
+setup.log
+
+# HPC: Apptainer image + build cache (setup.sh --hpc).
+.hpc/
+.doctor.*/

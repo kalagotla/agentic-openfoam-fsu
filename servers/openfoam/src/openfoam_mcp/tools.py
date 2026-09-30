@@ -2227,6 +2227,10 @@ def export_field_image(
         result = subprocess.run(
             [
                 "pvbatch",
+                # A single-image render needs no MPI; initialising it anyway
+                # hangs pvbatch on hosts where MPI cannot start (seen on
+                # WSL2 with mirrored networking), until the timeout fires.
+                "--no-mpi",
                 "--force-offscreen-rendering",
                 str(_PVBATCH_RENDER_SCRIPT),
                 json.dumps(opts),

@@ -1,0 +1,390 @@
+# Benchmark manifest for docs/evaluation-plan.md.
+#
+# One entry per benchmark case. `run_matrix.py` reads it to decide what to
+# run; `score_report.py` reads a single entry to score one run against that
+# case's expected-decision checklist.
+#
+# Cases carry two independent labels:
+#
+#   tier    — what kind of evidence the case provides
+#             1 = validated benchmark with published reference data
+#             2 = held-out generalisation (physics absent from the corpus)
+#   novelty — how far the case sits from anything the agent can copy
+#             N0 tutorial exists with the same physics and geometry
+#             N1 tutorial exists, parameters differ
+#             N2 requires recombining tutorials or a new meshing path
+#             N3 no tutorial analogue; needs custom C++
+#             N4 physics the corpus handles poorly, or no published reference
+#
+# `status: planned` marks a case the plan calls for but the repo cannot run
+# yet — usually because its reference dataset has not been authored. Keeping
+# them here makes the gap countable instead of implicit.
+#
+# `expected_decisions` is the per-case checklist behind the decision_coverage
+# metric: the load-bearing choices a reader needs narrated to reproduce the
+# case. A choice counts as recorded when a decision entry mentions any of its
+# keywords, so the metric asks whether the choice was narrated at all — not
+# whether it was narrated in particular words.
+
+version: 1
+
+defaults:
+  seeds: 5
+  automation_level: 5      # throughput arm; a level-3 subset measures HITL cost
+  corpus_state: empty      # paired arms flip this to `seeded`
+
+# Reusable checklist fragments, spliced into cases below.
+decision_sets:
+  core: &core
+    - key: structural_template
+      any_of: [tutorial, template, templated]
+    - key: mesh_strategy
+      any_of: [blockmesh, snappy, mesh strategy, meshing]
+    - key: mesh_resolution
+      any_of: [cells, resolution, grid, refine, x80, x64, x128]
+    - key: boundary_conditions
+      any_of: [boundary condition, bc, patch, inlet, outlet, wall]
+    - key: solver_application
+      any_of: [foam, solver, simple, pimple, piso]
+    - key: discretisation_schemes
+      any_of: [scheme, divschemes, upwind, linear, gauss]
+    - key: convergence_controls
+      any_of: [residual, converg, relaxation, urf, endtime, tolerance]
+    - key: validation_verdict
+      any_of: [validat, reference, l2, tolerance, pass, fail]
+
+  turbulence: &turbulence
+    - key: turbulence_model
+      any_of: [turbulence, komega, kepsilon, sst, spalart, laminar, rans, les]
+    - key: wall_treatment
+      any_of: [y+, yplus, wall function, wall treatment, near-wall]
+
+  snappy: &snappy
+    - key: surface_geometry
+      any_of: [stl, trisurface, surface mesh, geometry file]
+    - key: layer_addition
+      any_of: [layer, addlayers, prism]
+
+  parallel: &parallel
+    - key: decomposition
+      any_of: [decompose, scotch, n_procs, processor, mpirun, parallel]
+
+  compressible: &compressible
+    - key: flux_scheme
+      any_of: [kurganov, tadmor, flux, riemann, hllc]
+    - key: time_step_control
+      any_of: [courant, cfl, deltat, time step]
+
+cases:
+  # -------------------------------------------------------------------------
+  # Tier 1 — validated benchmarks
+  # -------------------------------------------------------------------------
+
+  - key: lid-cavity
+    scenario: cases/scenarios/lid-cavity.yaml
+    tier: 1
+    novelty: N1
+    spec_detail: full
+    physics: incompressible steady laminar, 2-D closed cavity
+    reference: ghia_1982
+    reference_status: present
+    compute_weight: light
+    template_tutorial: incompressible/icoFoam/cavity/cavity
+    corpus_family: incompressible/icoFoam/cavity
+    expected_decisions: *core
+
+  - key: lid-cavity-re1000
+    scenario: cases/scenarios/lid-cavity-re1000.yaml
+    tier: 1
+    novelty: N1
+    spec_detail: full
+    physics: incompressible steady laminar at a stiffer Reynolds number
+    reference: ghia_1982
+    reference_status: present
+    compute_weight: light
+    template_tutorial: incompressible/icoFoam/cavity/cavity
+    corpus_family: incompressible/icoFoam/cavity
+    # The near-transfer partner for lid-cavity in the H5 pairing: an
+    # annotation earned on Re 400 should help here and not help the cones.
+    transfer_partner: lid-cavity
+    expected_decisions: *core
+
+  - key: pitz-daily
+    scenario: cases/scenarios/pitz-daily.yaml
+    tier: 1
+    novelty: N0
+    spec_detail: full
+    physics: 2-D separated flow over a backward-facing step
+    reference: reattachment_length
+    reference_status: present
+    compute_weight: light
+    template_tutorial: incompressible/simpleFoam/pitzDaily
+    expected_decisions: *core
+
+  - key: naca-0012
+    scenario: cases/scenarios/naca-0012.yaml
+    tier: 1
+    novelty: N2
+    spec_detail: full
+    physics: external turbulent aerofoil, snappyHexMesh from STL
+    reference: xfoil_polar
+    reference_status: present
+    compute_weight: medium
+    expected_decisions:
+      - *core
+      - *turbulence
+      - *snappy
+
+  - key: flat-plate
+    scenario: cases/scenarios/flat-plate.yaml
+    tier: 1
+    novelty: N1
+    status: planned  # reference data / scenario not shipped in the FSU workshop repo
+    spec_detail: full
+    physics: turbulent flat-plate boundary layer
+    reference: nasa-tmr-flat-plate
+    reference_status: missing
+    compute_weight: light
+    expected_decisions:
+      - *core
+      - *turbulence
+
+  - key: onera-m6
+    scenario: cases/scenarios/onera-m6.yaml
+    tier: 1
+    novelty: N2
+    spec_detail: full
+    physics: 3-D transonic RANS wing, parallel
+    reference: agard_ar_138_qualitative
+    # A qualitative dataset cannot produce an L2 verdict. The measured AGARD
+    # Cp now ships (agard_ar_138_cp), but it does not score THIS case: the
+    # scenario is subsonic on NACA 0010 proxy sections while the data is
+    # transonic on the real M6 section. The blocker is the case, not the
+    # data — see onera-m6-transonic below.
+    reference_status: qualitative_only
+    status: blocked_on_case_mismatch
+    note: >-
+      The shipped scenario flies a symmetric-section stand-in, so the
+      measured AGARD Cp cannot be scored against it and only the
+      qualitative reference applies. `onera-m6-transonic` is the entry
+      that pairs the real M6 section with `agard_ar_138_cp`; until that
+      scenario is authored, the M6 rung of the novelty ladder has no
+      quantitatively scored case.
+    compute_weight: heavy
+    seeds: 3
+    expected_decisions:
+      - *core
+      - *turbulence
+      - *snappy
+      - *parallel
+
+  - key: supersonic-half-cones
+    scenario: cases/scenarios/supersonic-half-cones.yaml
+    tier: 1
+    novelty: N2
+    status: planned  # reference data / scenario not shipped in the FSU workshop repo
+    spec_detail: full
+    physics: supersonic twin half-cones, shock capture on a snappy mesh
+    reference: taylor-maccoll-conical-flow
+    reference_status: missing
+    compute_weight: heavy
+    seeds: 3
+    corpus_family: compressible/rhoCentralFoam/supersonic-half-cones
+    expected_decisions:
+      - *core
+      - *turbulence
+      - *snappy
+      - *compressible
+
+  - key: supersonic-half-cones-amr
+    scenario: cases/scenarios/supersonic-half-cones-amr.yaml
+    tier: 1
+    novelty: N2
+    status: planned  # reference data / scenario not shipped in the FSU workshop repo
+    spec_detail: full
+    physics: as above, with adaptive shock-tracking refinement
+    reference: taylor-maccoll-conical-flow
+    reference_status: missing
+    compute_weight: heavy
+    seeds: 3
+    corpus_family: compressible/rhoCentralFoam/supersonic-half-cones
+    transfer_partner: supersonic-half-cones
+    expected_decisions:
+      - *core
+      - *turbulence
+      - *snappy
+      - *compressible
+
+  # -------------------------------------------------------------------------
+  # Specification-detail arm — same physics, three levels of guidance.
+  #
+  # These three scenarios differ only in how much the YAML decides for the
+  # agent, so they isolate one variable the plan's Tier 3 probes otherwise
+  # test only at the extremes: what happens to decision coverage, origin
+  # tagging, and validation when the researcher says less.
+  # -------------------------------------------------------------------------
+
+  - key: lid-cavity-expert
+    scenario: cases/scenarios/lid-cavity-expert.yaml
+    tier: 1
+    novelty: N1
+    spec_detail: expert          # YAML fixes solver, template, mesh intent
+    physics: incompressible steady laminar, 2-D closed cavity
+    reference: ghia_1982
+    reference_status: present
+    compute_weight: light
+    spec_detail_group: lid-cavity-spec-detail
+    expected_decisions: *core
+
+  - key: lid-cavity-guided
+    scenario: cases/scenarios/lid-cavity-guided.yaml
+    tier: 1
+    novelty: N1
+    spec_detail: guided          # YAML poses the choices, agent decides
+    physics: incompressible steady laminar, 2-D closed cavity
+    reference: ghia_1982
+    reference_status: present
+    compute_weight: light
+    spec_detail_group: lid-cavity-spec-detail
+    expected_decisions: *core
+
+  - key: lid-cavity-prompt
+    scenario: cases/scenarios/lid-cavity-prompt.yaml
+    tier: 1
+    novelty: N1
+    spec_detail: prompt          # a paragraph; every choice is the agent's
+    physics: incompressible steady laminar, 2-D closed cavity
+    reference: ghia_1982
+    reference_status: present
+    compute_weight: light
+    spec_detail_group: lid-cavity-spec-detail
+    expected_decisions: *core
+
+  # -------------------------------------------------------------------------
+  # Tier 2 — held-out generalisation. All planned; each was chosen because it
+  # forces a metric *shape* the current suite lacks, which stress-tests the
+  # agent-authored analysis script as much as the case setup.
+  # -------------------------------------------------------------------------
+
+  - key: onera-m6-transonic
+    tier: 1
+    novelty: N2
+    status: planned
+    physics: 3-D transonic RANS wing on the real M6 section, shock on the upper surface
+    reference: agard_ar_138_cp
+    reference_status: present
+    compute_weight: heavy
+    seeds: 3
+    # The measured data exists and is quantitative; what is missing is a case
+    # that matches it — real section geometry (available as
+    # onera_m6_root_section_upper in the same dataset) at run 308 conditions,
+    # M = 0.8395, alpha = 3.06 deg, Re = 11.72e6.
+    expected_decisions:
+      - *core
+      - *turbulence
+      - *snappy
+      - *parallel
+
+  - key: poiseuille
+    scenario: cases/scenarios/poiseuille.yaml
+    tier: 2
+    novelty: N1
+    status: planned  # reference data / scenario not shipped in the FSU workshop repo
+    physics: laminar plane-channel flow
+    reference: poiseuille_analytic
+    reference_status: missing
+    metric_shape: >-
+      parameter-free profile — u/u_max is 1-(y/h)^2 for every fluid, gap,
+      and pressure gradient, so agreement cannot be manufactured by
+      rescaling and a miss is discretisation error alone
+    compute_weight: light
+    expected_decisions: *core
+
+  - key: taylor-green
+    scenario: cases/scenarios/taylor-green.yaml
+    tier: 2
+    novelty: N1
+    status: planned  # reference data / scenario not shipped in the FSU workshop repo
+    physics: decaying Taylor-Green vortex
+    reference: taylor-green-decay
+    reference_status: missing
+    metric_shape: "transient decay rate — one-sided, since numerical dissipation only adds"
+    compute_weight: light
+    expected_decisions:
+      - *core
+      # The scheme and the time step are the experiment here, not incidental
+      # settings, so a run that leaves them unnarrated has not reported what
+      # it did.
+      - key: time_integration
+        any_of: [deltat, time step, courant, euler, crank, backward, ddtscheme]
+      - key: initial_field
+        any_of: [initial, t = 0, setfields, funkysetfields, exact solution]
+
+  - key: cylinder-re100
+    tier: 2
+    novelty: N2
+    status: planned
+    physics: laminar vortex shedding behind a circular cylinder
+    reference: williamson_1996_strouhal
+    reference_status: missing
+    metric_shape: frequency domain (Strouhal)
+    compute_weight: medium
+    expected_decisions: *core
+
+  - key: heated-cavity
+    tier: 2
+    novelty: N2
+    status: planned
+    physics: differentially heated square cavity, buoyancy-driven
+    reference: de_vahl_davis_1983
+    reference_status: missing
+    metric_shape: Nusselt integral
+    compute_weight: light
+    expected_decisions: *core
+
+  - key: channel-retau180
+    scenario: cases/scenarios/channel-retau180.yaml
+    tier: 2
+    novelty: N2
+    status: planned  # reference data / scenario not shipped in the FSU workshop repo
+    physics: turbulent plane channel at Re_tau = 180
+    reference: moser-1999-channel-retau180
+    reference_status: missing
+    metric_shape: "wall-normal profile in wall units, plus Reynolds-stress anisotropy"
+    compute_weight: medium
+    expected_decisions:
+      - *core
+      - *turbulence
+      # Channel flow is driven, not blown. How the pressure gradient is
+      # imposed decides what Re_tau the solution actually reaches.
+      - key: forcing
+        any_of: [pressure gradient, forcing, momentum source, bulk velocity, fvOptions]
+
+  - key: cd-nozzle
+    scenario: cases/scenarios/cd-nozzle.yaml
+    tier: 2
+    novelty: N2
+    status: planned  # reference data / scenario not shipped in the FSU workshop repo
+    physics: converging-diverging nozzle with a normal shock
+    reference: cd-nozzle-normal-shock
+    reference_status: missing
+    metric_shape: shock position
+    compute_weight: light
+    expected_decisions:
+      - *core
+      - *compressible
+      # The back pressure is what fixes the shock position; a run that does
+      # not narrate how it was imposed has not narrated the experiment.
+      - key: back_pressure
+        any_of: [back pressure, outlet pressure, p_back, exit pressure]
+
+  - key: custom-inlet-bc
+    tier: 2
+    novelty: N3
+    status: planned
+    physics: a case requiring a custom inlet boundary condition compiled via wmake
+    reference: null
+    reference_status: not_applicable
+    metric_shape: compile-and-run, self-consistency
+    compute_weight: medium
+    expected_decisions: *core

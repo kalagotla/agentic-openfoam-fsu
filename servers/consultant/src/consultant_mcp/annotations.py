@@ -91,6 +91,16 @@ def read_annotation(tutorial_path: str, root: Path | None = None) -> Annotation:
     """
     file_path = annotation_path_for(tutorial_path, root=root)
     if not file_path.is_file():
+        # Tutorials nest a case under a directory of the same name
+        # (icoFoam/cavity/cavity). Agents often pass the directory
+        # ("incompressible/icoFoam/cavity"); resolve that to the nested case
+        # rather than report a miss that makes the run rediscover the setup.
+        clean = tutorial_path.strip().strip("/")
+        nested = f"{clean}/{clean.rsplit('/', 1)[-1]}"
+        nested_path = annotation_path_for(nested, root=root)
+        if nested_path.is_file():
+            tutorial_path, file_path = nested, nested_path
+    if not file_path.is_file():
         raise AnnotationNotFoundError(
             f"No annotation at {file_path}. Author one to cite this tutorial."
         )
