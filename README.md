@@ -63,10 +63,16 @@ Four MCP servers (`openfoam`, `validation`, `consultant`, `research_assistant`) 
                               #   workshop.sh, eval/ (benchmark harness)
 ```
 
-## Install — one script
+## Install — one script, two places to run it
 
-Works on **Windows (WSL2)** and **Ubuntu 22.04 / 24.04**. No Docker, no
-manual OpenFOAM build.
+| Where | How | Guide |
+|---|---|---|
+| **Your laptop** — Windows (WSL2) or Ubuntu 22.04 / 24.04 | `./setup.sh` (uses sudo for system packages) | below |
+| **FSU cluster (RCC)** — interactive compute node | the same `./setup.sh`; it detects the cluster and installs without sudo | [`workshop/hpc.md`](workshop/hpc.md) |
+
+No Docker, no manual OpenFOAM build.
+
+### Laptop (WSL2 / Ubuntu)
 
 **Windows first:** in an **admin PowerShell**, `wsl --install -d Ubuntu-24.04`,
 reboot, and open the **Ubuntu** app. Run everything below in that terminal,
@@ -89,15 +95,31 @@ cd agentic-openfoam
 | Agents | Claude Code (`claude`) and the Kilo CLI (`kilo`) |
 | Local model | Ollama plus a model chosen for your GPU/RAM, exposed to the agents as `cfd-local` |
 
-**On an HPC cluster** (FSU RCC) the same command runs without sudo:
-OpenFOAM v2412 comes from one shared portable Apptainer image, and the
-agents and Ollama unpack under `~/.local`. See
-[`workshop/hpc.md`](workshop/hpc.md).
-
 It ends with `./scripts/doctor.sh`, which meshes and solves a tutorial,
 checks that Kilo sees all four MCP servers, and checks the local model.
 Options: `--model <ollama-tag>`, `--no-local`, `--no-claude`, `--no-kilo`.
 Change the local model later with `./scripts/local-model.sh <tag>`.
+
+### FSU cluster (RCC)
+
+Start an interactive job **in a login shell** (compute nodes reach the
+internet only through RCC's web proxy, which login shells load), then clone
+and run the same script:
+
+```bash
+srun -A genacc_q -p genacc_q -c 8 --mem=32G -t 3:00:00 --pty bash -l     # CPU node
+# local models need a GPU node instead, e.g.:
+# srun -A backfill2 -p backfill2 --gres=gpu:1 -c 8 --mem=48G -t 3:00:00 --pty bash -l
+git clone https://github.com/kalagotla/agentic-openfoam-fsu.git agentic-openfoam
+cd agentic-openfoam && ./setup.sh
+```
+
+On the cluster there is no sudo and no apt. OpenFOAM v2412 comes from one
+shared, portable Apptainer image (the cluster's own modules stop at
+OpenFOAM 7 since the AlmaLinux 9 upgrade), and Node, the agents and Ollama
+unpack under `~/.local`. Use the account/partition your instructor gives
+you. Details, GPU notes and the instructor's one-time image build are in
+[`workshop/hpc.md`](workshop/hpc.md).
 
 ## Run
 
@@ -177,6 +199,7 @@ Schema and how to write your own: [`cases/scenarios/README.md`](cases/scenarios/
 - [`docs/runtime-options.md`](docs/runtime-options.md) — Claude Code, Cursor, Cline, Continue.dev, Ollama
 - [`docs/how-to-extend-openfoam.md`](docs/how-to-extend-openfoam.md) — custom BCs, function objects, turbulence models
 - [`workshop/README.md`](workshop/README.md) — the hands-on walkthrough
+- [`workshop/hpc.md`](workshop/hpc.md) — running on the FSU cluster (RCC)
 - [`docs/evaluation-plan.md`](docs/evaluation-plan.md) / [`docs/evaluation-results.md`](docs/evaluation-results.md) — how agents are scored, and the results
 - [`docs/workshop-handout.md`](docs/workshop-handout.md) — 1-page session handout
 
