@@ -27,7 +27,7 @@ jobs:
           enable-cache: true
 
       - name: Sync dependencies
-        run: uv sync --all-extras --dev
+        run: uv sync --all-packages --all-extras --dev
 
       - name: Run the suite
         run: uv run pytest scripts servers -q --junitxml=results.xml
@@ -70,7 +70,7 @@ jobs:
           enable-cache: true
 
       - name: Sync dependencies
-        run: uv sync --all-extras --dev
+        run: uv sync --all-packages --all-extras --dev
 
       - name: Tool arm over the fault corpus
         run: uv run python scripts/eval/probe_runner.py --workdir "$RUNNER_TEMP/probes"
