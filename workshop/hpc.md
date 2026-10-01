@@ -67,7 +67,9 @@ No GitHub access from the cluster? The same repo is on the cluster as a
 tarball; unpack it instead of cloning:
 
 ```bash
-cd ~ && tar -xzf /gpfs/research/engineering/dk26/agentic-openfoam-shared/agentic-openfoam.tar.gz
+S=/gpfs/research/engineering/engineering_seminar/2026_10_02/agentic-openfoam-shared
+[ -d $S ] || S=/gpfs/research/engineering/dk26/agentic-openfoam-shared
+cd ~ && tar -xzf $S/agentic-openfoam.tar.gz
 cd agentic-openfoam && ./setup.sh
 ```
 
