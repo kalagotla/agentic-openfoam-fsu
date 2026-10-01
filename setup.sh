@@ -234,6 +234,8 @@ if ! grep -qF "$MARK_BEGIN" "$HOME/.bashrc" 2>/dev/null; then
         echo "$MARK_BEGIN"
         echo 'case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) export PATH="$HOME/.local/bin:$PATH" ;; esac'
         $HPC || echo "alias of${OF_VERSION}='source ${OF_BASHRC}'"
+        # Your own Ollama port on shared cluster nodes (see scripts/local-model.sh).
+        $HPC && echo 'export OLLAMA_HOST=127.0.0.1:$((20000 + $(id -u) % 20000))'
         echo "# <<< agentic-openfoam <<<"
     } >>"$HOME/.bashrc"
     ok "added ~/.local/bin to PATH$($HPC || echo " and the 'of${OF_VERSION}' alias") in ~/.bashrc"

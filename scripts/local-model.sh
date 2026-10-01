@@ -17,8 +17,15 @@ set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ALIAS=cfd-local
+# On a shared cluster node other users run their own Ollama, so each user
+# gets a port of their own instead of the default 11434 (which would quietly
+# connect you to someone else's server, and their model store).
+if [[ -z ${OLLAMA_HOST:-} ]] && command -v sbatch >/dev/null 2>&1; then
+    OLLAMA_HOST=127.0.0.1:$((20000 + $(id -u) % 20000))
+fi
 OLLAMA_URL=${OLLAMA_HOST:-http://localhost:11434}
 [[ $OLLAMA_URL == http* ]] || OLLAMA_URL="http://$OLLAMA_URL"
+export OLLAMA_HOST=$OLLAMA_URL      # for the ollama CLI calls below
 # A server on another machine (scripts/hpc-gpu.sh points us at the Ollama in
 # a GPU job, through a tunnel on localhost:11435). Then we neither start a
 # server nor look at this machine's GPU.
@@ -86,7 +93,7 @@ ensure_ollama() {
     fi
     if ! ollama_up; then
         mkdir -p "$HOME/.ollama"
-        nohup ollama serve >"$HOME/.ollama/serve.log" 2>&1 &
+        OLLAMA_HOST=${OLLAMA_URL#http://} nohup ollama serve >"$HOME/.ollama/serve.log" 2>&1 &
     fi
     for _ in $(seq 1 30); do ollama_up && return; sleep 1; done
     die "Ollama did not start. See ~/.ollama/serve.log"
