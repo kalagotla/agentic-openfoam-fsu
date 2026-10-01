@@ -53,9 +53,6 @@ if bash -c "timeout -s KILL 30 scripts/with-openfoam.sh mpirun -np 1 true" >/dev
     pass "MPI starts (parallel runs available)"
 else
     note "mpirun hangs or fails here — serial runs are fine; parallel runs are not."
-    if grep -qi microsoft /proc/version 2>/dev/null; then
-        note "  (Seen on WSL2 hosts using networkingMode=mirrored in .wslconfig.)"
-    fi
 fi
 
 # Agents.

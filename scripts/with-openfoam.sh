@@ -18,6 +18,12 @@ set -eo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OF_BASHRC=/usr/lib/openfoam/openfoam2412/etc/bashrc
 
+# Open MPI's hwloc probes X displays at startup (its "gl" plugin). Under WSLg
+# it finds :0, then tries :1 over TCP on localhost:6001; with WSL's mirrored
+# networking that connection is never refused, so mpirun hangs before it
+# starts. MPI does not need display enumeration, so switch the probe off.
+export HWLOC_COMPONENTS=${HWLOC_COMPONENTS:--gl}
+
 if [[ -f $OF_BASHRC ]]; then
     # shellcheck disable=SC1090
     source "$OF_BASHRC" >/dev/null 2>&1 || true

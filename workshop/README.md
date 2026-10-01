@@ -255,4 +255,4 @@ live GPU is not available.**
 | Local model stops or writes a tool call as text | reply `continue`; if it keeps failing, try `./scripts/local-model.sh muse-glimmer:30b` (GPU ≥ 24 GB) or use Loop B |
 | Step 2 did not cite the corpus | `./scripts/workshop.sh status` — the entry must be promoted (no `.draft.md`) |
 | `prepare_case` refuses: directory exists | `./scripts/workshop.sh reset` |
-| Doctor warns `mpirun hangs` | serial cases (all of today's) are unaffected |
+| `mpirun` hangs on WSL (doctor warning, or your own parallel runs) | Open MPI's hwloc probes X display `:1` over `localhost:6001`, which never answers under WSL's mirrored networking. The agents' tools already set the fix; for your own shell: `export HWLOC_COMPONENTS=-gl` (setup adds it to `~/.bashrc`) |
