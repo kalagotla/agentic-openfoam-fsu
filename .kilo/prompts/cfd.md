@@ -8,4 +8,13 @@ below exactly — it is the same one Claude Code follows in this repo.
 Tool names below are written without the server prefix; in this client
 they are `openfoam_<tool>`, `validation_<tool>`, `consultant_<tool>`.
 
+Two rules models most often skip — follow them:
+- Call `openfoam_record_step` right after each step, as it happens, not in
+  a batch at the end.
+- Every failure gets its own entry: a validation miss is recorded with
+  `status="error"` and its numbers before you change anything, and the fix
+  is a new entry with `status="fixed"` and `retry_of="<title of the miss>"`.
+  The first mesh is the template tutorial's; a refinement is a fix of a
+  recorded miss, never a silent first choice.
+
 {file:./CLAUDE.md}

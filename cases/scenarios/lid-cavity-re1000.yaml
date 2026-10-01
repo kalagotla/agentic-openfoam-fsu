@@ -5,12 +5,10 @@
 # the time this runs, Step 1 has produced — and the researcher has reviewed and promoted
 # — a corpus entry at corpus/incompressible/icoFoam/cavity/cavity.md. When the
 # agent picks this tutorial as its template it calls
-# consultant.get_tutorial_annotation on that path and inherits the learned
-# approach: swap transient icoFoam for steady simpleFoam, set a pressure
-# reference cell for the closed domain, tighten residualControl before a grid
-# study, and reach Ghia-quality profiles with a well-resolved grid rather than
-# the tutorial's coarse 20x20. So this run should skip the coarse-mesh failure
-# that Step 1 had to discover, and converge in fewer iterations.
+# consultant.get_tutorial_annotation on that path and inherits whatever
+# Step 1 learned. This file deliberately does not repeat those lessons: any
+# difference from Step 1's run should come from the corpus entry, so the
+# REPORT shows which choices cite it.
 #
 # Re=1000 is still steady and laminar, well within the regime where a steady
 # solver is valid. The 2-D cavity does become time-periodic at high enough Re;
@@ -44,10 +42,8 @@ geometry:
 mesh:
   strategy: blockMesh
   dimension: 2d
-  # Resolution is not preset. The corpus entry from the Re=400 run records the
-  # grid that reached the Ghia band there; Re=1000 sharpens the wall jets and
-  # corner vortices, so expect to need at least as fine a grid (and possibly
-  # wall grading). Establish the final count by grid convergence toward Ghia.
+  # Resolution is not preset. Without other guidance, start from the
+  # template tutorial's mesh and refine only if validation misses Ghia.
 
 fluid:
   kinematic_viscosity: 0.001      # nu = U_lid * L / Re = 1 * 1 / 1000

@@ -48,7 +48,9 @@ anchor is Ghia, Ghia & Shin's own solution, computed on a **129×129
 uniform mesh**; a converged 2nd-order solver should approach the 5% band
 as the grid is refined toward that resolution. There is no published
 source for a "known-good" cell count below that, so don't cite one —
-demonstrate the convergence instead.
+demonstrate the convergence instead. Start from the template tutorial's
+grid (or from a corpus entry, if one exists) and refine on evidence; do not
+jump straight to 129×129. The refinement study is part of the record.
 
 ## Provenance
 

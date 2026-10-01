@@ -158,6 +158,12 @@ then, in Claude Code, `/clear` and:
 > Set up and run cases/scenarios/lid-cavity-re1000.yaml
 ```
 
+Run Step 1 with a strong frontier model (Claude, or GPT/Claude through
+Copilot or Codex): it writes the corpus entry everything after it reuses.
+In our tests the free Nemotron model started correctly from the tutorial
+mesh but skipped the step-by-step `REPORT.md` narration, which is what the
+entry is drafted from. It does well as Step 2's orchestrator (Loop B).
+
 The same loop works in any of the agents. In **Copilot** (`copilot`) or
 **Codex** (`codex`), type the same two prompts, starting a fresh session
 (`/clear`, or restart the CLI) between the steps. In Kilo, run `kilo`,

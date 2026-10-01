@@ -9,14 +9,14 @@
 # ship in this exact form: the closest tutorial is
 # incompressible/icoFoam/cavity at Re=10, which uses a transient solver
 # and a coarse 20x20 mesh. The agent's job is to adapt that tutorial's
-# structural patterns (geometry, patch layout) to a steady, Re=400 case
-# with a mesh and solver appropriate for benchmark-quality results, then
-# validate the centerline velocity profiles against Ghia, Ghia & Shin
-# (1982).
+# structural patterns (geometry, patch layout) to a steady, Re=400 case,
+# start from the tutorial's own mesh, and validate the centerline velocity
+# profiles against Ghia, Ghia & Shin (1982), refining only when validation
+# says so.
 #
-# Output: cases/work/lid-cavity/REPORT.md narrating each decision; the
-# run should converge cleanly and validate within the Ghia tolerance
-# band on a properly resolved mesh.
+# Output: cases/work/<name>/REPORT.md narrating each decision. Whatever
+# this run has to discover (and fix) on the way to a validated result is
+# what the corpus entry records for the next run.
 #
 # Sections follow the standard scenario order (see cases/scenarios/README.md):
 # physics -> geometry -> mesh -> fluid -> flow_conditions ->
@@ -55,9 +55,12 @@ geometry:
 mesh:
   strategy: blockMesh             # structured grid on the square; no STL/snappy
   dimension: 2d                   # single cell in z; empty front/back patches
-  # Resolution is intentionally NOT preset. Establish it by refining until the
-  # centerline profiles converge toward Ghia (a grid-convergence study), per
-  # the reference's tolerance rationale. Ghia's own grid is 129x129 uniform.
+  # Start from the template tutorial's own mesh (its blockMeshDict as is).
+  # Do not pick a finer grid up front: run, validate, and refine only if the
+  # centerline profiles miss Ghia, until they pass and stop changing (a
+  # grid-convergence study). The refinements, and why each was needed, are
+  # the evidence this run exists to record.
+  guidance: "start from the template tutorial mesh; refine only when validation misses Ghia"
 
 fluid:
   # Choose nu to give Re = U_lid * L / nu = 400 with U_lid = 1 m/s, L = 1 m.
