@@ -1,5 +1,10 @@
 # Recorded runs (GPU fallback)
 
+> **Read this first.** The runs in the first table were recorded before an
+> audit that removed answer hints from the scenarios and Kilo prompts (the
+> Step 2 scenario spelled out Step 1's lessons, and the `cfd-local` prompt
+> carried case-specific fixes). The second table is the re-test after it.
+
 If the live GPU is not available, show these instead. They are the
 two-step demo recorded on Oct 1, 2026, unedited: the agents' own
 `REPORT.md` audit trails and validation plots. The local model was
@@ -33,3 +38,25 @@ so it ran without review pauses.
 - The free frontier gateway timed out ("Upstream idle timeout") in two
   earlier attempts at Loop B. Those runs are not shown; the one above is
   the first that did not hit a timeout.
+
+## Re-test after the instruction audit (Oct 1, evening)
+
+Same scenarios, scenario hints removed, Kilo prompts tightened (speed
+budgets, step caps). Kilo used the free Nemotron 3 Ultra; the local model
+was gpt-oss:20b on the RTX 5090.
+
+| Run | Result | Time |
+|---|---|---|
+| [Step 1, Claude Code](audited-claude-step1/REPORT.md) | **PASS**: started on the tutorial's 20×20 mesh, recorded the v-centerline miss (5.9% > 5%), refined 40×40 → 80×80 (u 0.17%, v 4.64%); 12 narrated steps, 3 retries; a rich [corpus entry](audited-claude-step1/corpus-entry.md) | 4.9 min, $2.30 |
+| Step 1, Kilo `cfd` | PASS on the 20×20 tutorial mesh (v 4.3%: borderline, its sampling differed from Claude's); 7 steps; a thin corpus entry | 12 min |
+| Step 2, Kilo `cfd` (frontier only), Kilo's entry | 20×20 missed, refined to 60×60, **PASS**; looked the entry up but cited it 0× | 15.5 min |
+| Step 2, Kilo `cfd-orchestrator`, Kilo's entry | cited the entry 12×, stayed on its 20×20 advice, **FAIL**, then hit the step cap | 17.5 min |
+| Step 2, Kilo `cfd-orchestrator`, Claude's entry | went straight to Claude's 80×80 and converged, but did most steps itself and hit the 90-step cap: **no verdict** | 20 min |
+| Step 2, Kilo `cfd-local` | repaired its own dict headers, found pRefCell itself; **no verdict** after 8 nudges | 6 min |
+
+What this says for the session: run **Step 1 with Claude Code** (or a
+strong model in Copilot/Codex) so the entry is worth reusing, and run
+**Step 2 with a strong frontier agent** too for a reliable live demo. Show
+the Kilo frontier + local and local-only loops as experiments, and point
+out that a weak Step 1 entry (Kilo's "20×20 is enough") carried straight
+into a failed Step 2: the reason a human reviews before promoting.

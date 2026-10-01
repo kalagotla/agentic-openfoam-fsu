@@ -1,0 +1,37 @@
+{
+  "checks": {
+    "u_centerline": {
+      "success": true,
+      "l2_error": 0.030011632107119376,
+      "linf_error": 0.06446814000000001,
+      "tolerance_threshold": 0.06636299999999999,
+      "within_tolerance": true,
+      "n_compared": 17,
+      "reference_range": 1.3272599999999999,
+      "relative_l2": 0.022611720467067026,
+      "tolerance_relative_L2": 0.05,
+      "reference_dataset": "ghia_re_400_u_centerline"
+    },
+    "v_centerline": {
+      "success": true,
+      "l2_error": 0.044049906936056364,
+      "linf_error": 0.08702384000000007,
+      "tolerance_threshold": 0.037598,
+      "within_tolerance": false,
+      "n_compared": 17,
+      "reference_range": 0.75196,
+      "relative_l2": 0.05858011986815305,
+      "tolerance_relative_L2": 0.05,
+      "reference_dataset": "ghia_re_400_v_centerline"
+    }
+  },
+  "all_pass": false,
+  "provenance": {
+    "reference": "ghia_1982",
+    "sample_time": "117",
+    "numpy": "2.4.4",
+    "matplotlib": "3.10.9",
+    "python": "3.13.12",
+    "git_commit": "e33469f37e8f2ca5205ae4d6c2b119a3a6a81af4"
+  }
+}
