@@ -106,3 +106,4 @@ setup.log
 # HPC: Apptainer image + build cache (setup.sh --hpc).
 .hpc/
 .doctor.*/
+!workshop/recorded/**/*.png
