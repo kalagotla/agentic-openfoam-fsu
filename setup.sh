@@ -32,7 +32,9 @@
 # HPC: OpenFOAM v2412 ships as one portable Apptainer image (.sif). setup.sh
 # uses, in order: $AOF_OPENFOAM_SIF, the shared path / URL in
 # workshop/hpc-site.env, a copy already in .hpc/, or builds one (compute
-# node only). Model weights go to $OLLAMA_MODELS (default ~/.ollama/models).
+# node only). Ollama and the model weights are symlinked from the shared
+# store in hpc-site.env when present, otherwise downloaded (weights to
+# $OLLAMA_MODELS, default ~/.ollama/models).
 #
 set -euo pipefail
 
@@ -56,7 +58,7 @@ while (($#)); do
         --no-claude) WANT_CLAUDE=false ;;
         --no-kilo)   WANT_KILO=false ;;
         --hpc)       HPC=true ;;
-        -h|--help)   sed -n '2,36p' "$0"; exit 0 ;;
+        -h|--help)   sed -n '2,38p' "$0"; exit 0 ;;
         *) echo "Unknown option: $1 (see --help)" >&2; exit 2 ;;
     esac
     shift
@@ -290,6 +292,12 @@ fi
 step 5/6 "Local model (Ollama)"
 install_ollama_userspace() {
     # No sudo: the release archive holds bin/ollama plus its GPU runtimes.
+    if [[ -x ${AOF_OLLAMA_SHARED:-}/bin/ollama ]]; then
+        say "Using the shared Ollama in $AOF_OLLAMA_SHARED (no download)."
+        ln -sf "$AOF_OLLAMA_SHARED/bin/ollama" "$HOME/.local/bin/ollama"
+        hash -r
+        return
+    fi
     say "Downloading Ollama (~1.4 GB, user-space)…"
     rm -rf "$HOME/.local/ollama" && mkdir -p "$HOME/.local/ollama"
     curl -fsSL https://ollama.com/download/ollama-linux-amd64.tar.zst \

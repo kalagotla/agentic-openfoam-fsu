@@ -85,6 +85,80 @@ ensure_ollama() {
     die "Ollama did not start. See ~/.ollama/serve.log"
 }
 
+# A read-only model store shared by the class (cluster: instructor-staged with
+# scripts/stage-hpc-shared.sh, path in workshop/hpc-site.env). Instead of
+# downloading, copy the model's small manifest into our own store and
+# symlink its weight blobs, so the weights cost no download and no quota,
+# while `ollama create` still has a writable store of our own.
+[[ -f $REPO_DIR/workshop/hpc-site.env ]] && source "$REPO_DIR/workshop/hpc-site.env"
+link_shared_model() {
+    local shared=${AOF_OLLAMA_MODELS_SHARED:-} rel mine digest
+    [[ -n $shared && -d $shared/manifests ]] || return 1
+    rel=$(manifest_path "$1")
+    [[ -r $shared/$rel ]] || return 1
+    mine=${OLLAMA_MODELS:-$HOME/.ollama/models}
+    mkdir -p "$mine/blobs" "$(dirname "$mine/$rel")"
+    for digest in $(grep -o 'sha256:[0-9a-f]\{64\}' "$shared/$rel" | sort -u); do
+        digest=${digest/:/-}
+        [[ -r $shared/blobs/$digest ]] || return 1
+        [[ -e $mine/blobs/$digest ]] || ln -s "$shared/blobs/$digest" "$mine/blobs/$digest"
+    done
+    cp "$shared/$rel" "$mine/$rel"
+}
+
+# Path of a pulled model's manifest, and of its weights blob.
+manifest_path() {
+    local name=${1%%:*} tag=${1#*:}
+    [[ $1 == *:* ]] || tag=latest
+    [[ $name == */* ]] || name=library/$name
+    echo "manifests/registry.ollama.ai/$name/$tag"
+}
+blob_path() {
+    local store=${OLLAMA_MODELS:-$HOME/.ollama/models} digest
+    digest=$(python3 -c 'import json,sys; m=json.load(open(sys.argv[1]))
+print(next(l["digest"] for l in m["layers"] if l["mediaType"].endswith(".model")))' \
+        "$store/$(manifest_path "$1")" 2>/dev/null) || return 0
+    echo "$store/blobs/${digest/:/-}"
+}
+# The `ollama create` equivalent for FROM + PARAMETERs: same layers as the
+# base model with its params layer replaced, plus a matching config.
+write_alias() {
+    python3 - "${OLLAMA_MODELS:-$HOME/.ollama/models}" "$(manifest_path "$1")" \
+        "$(manifest_path "$ALIAS")" "$2" "${3:-}" <<'PY'
+import hashlib, json, os, sys
+store, base, alias, ctx, threads = sys.argv[1:]
+def blob(data):
+    digest = "sha256:" + hashlib.sha256(data).hexdigest()
+    with open(os.path.join(store, "blobs", digest.replace(":", "-")), "wb") as f:
+        f.write(data)
+    return digest
+def read_blob(digest):
+    return open(os.path.join(store, "blobs", digest.replace(":", "-")), "rb").read()
+m = json.load(open(os.path.join(store, base)))
+params, layers = {}, []
+for layer in m["layers"]:
+    if layer["mediaType"] == "application/vnd.ollama.image.params":
+        params = json.loads(read_blob(layer["digest"]))
+    else:
+        layers.append(layer)
+params["num_ctx"] = int(ctx)
+if threads:
+    params["num_thread"] = int(threads)
+data = json.dumps(params).encode()
+layers.append({"mediaType": "application/vnd.ollama.image.params",
+               "digest": blob(data), "size": len(data)})
+config = json.loads(read_blob(m["config"]["digest"]))
+config.setdefault("rootfs", {"type": "layers"})["diff_ids"] = [l["digest"] for l in layers]
+data = json.dumps(config).encode()
+m["config"] = dict(m["config"], digest=blob(data), size=len(data))
+m["layers"] = layers
+path = os.path.join(store, alias)
+os.makedirs(os.path.dirname(path), exist_ok=True)
+with open(path, "w") as f:
+    json.dump(m, f)
+PY
+}
+
 show() {
     if [[ -f $REPO_DIR/.local-model ]]; then
         echo "$ALIAS -> $(cat "$REPO_DIR/.local-model")"
@@ -116,21 +190,27 @@ ensure_ollama
 
 if ollama show "$MODEL" >/dev/null 2>&1; then
     say "$MODEL already pulled."
+elif link_shared_model "$MODEL" && ollama show "$MODEL" >/dev/null 2>&1; then
+    say "$MODEL linked from the shared store $AOF_OLLAMA_MODELS_SHARED (no download)."
 else
     say "Pulling $MODEL (one-time download)…"
     ollama pull "$MODEL"
 fi
 
 say "Creating alias $ALIAS -> $MODEL (num_ctx $CTX)…"
-tmp=$(mktemp)
-printf 'FROM %s\nPARAMETER num_ctx %s\n' "$MODEL" "$CTX" >"$tmp"
 THREADS=$(job_cpus)
-if [[ -n $THREADS ]]; then
-    printf 'PARAMETER num_thread %s\n' "$THREADS" >>"$tmp"
-    say "Limiting the model to the job's $THREADS CPU threads."
+[[ -n $THREADS ]] && say "Limiting the model to the job's $THREADS CPU threads."
+if [[ -L $(blob_path "$MODEL") ]]; then
+    # Weights are symlinks into the read-only shared store, where `ollama
+    # create` fails (it touches each blob's mtime), so write the alias directly.
+    write_alias "$MODEL" "$CTX" "$THREADS" || die "Could not write the $ALIAS alias"
+else
+    tmp=$(mktemp)
+    printf 'FROM %s\nPARAMETER num_ctx %s\n' "$MODEL" "$CTX" >"$tmp"
+    [[ -n $THREADS ]] && printf 'PARAMETER num_thread %s\n' "$THREADS" >>"$tmp"
+    ollama create "$ALIAS" -f "$tmp" >/dev/null 2>&1 || die "ollama create failed"
+    rm -f "$tmp"
 fi
-ollama create "$ALIAS" -f "$tmp" >/dev/null 2>&1 || die "ollama create failed"
-rm -f "$tmp"
 
 mkdir -p "$REPO_DIR/.kilo"
 cat >"$REPO_DIR/.kilo/kilo.jsonc" <<EOF
