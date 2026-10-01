@@ -57,13 +57,16 @@ Open a **new** terminal afterwards so the PATH changes apply.
 
 | Your machine | Model | Download |
 |---|---|---|
-| GPU with ≥ 14 GB, or ≥ 24 GB RAM without one | `gpt-oss:20b` | 13 GB |
-| smaller GPU, or 12–24 GB RAM | `qwen3:8b` | 5 GB |
-| less than that | `qwen3:4b` | 2.5 GB |
+| GPU with ≥ 14 GB, or ≥ 24 GB RAM without one | `gpt-oss:20b` (OpenAI) | 14 GB |
+| smaller GPU, or 12–24 GB RAM | `gemma4:12b` (Google) | 8 GB |
+| less than that | `nemotron-3-nano:4b` (NVIDIA) | 2.8 GB |
 
-To use a different model, pass any Ollama tag, e.g.
-`./scripts/local-model.sh qwen3:30b`. The agents always address it as
-`cfd-local`, so nothing else changes.
+The workshop sticks to US-developed open models. Others worth trying on a
+GPU with 24 GB or more: `muse-glimmer:30b` (Meta, 18 GB) and
+`nemotron-3.5-lightning:30b` (NVIDIA, 25 GB). Switch with, e.g.,
+`./scripts/local-model.sh muse-glimmer:30b`. The agents always address the
+model as `cfd-local`, so nothing else changes. Only `gpt-oss:20b` was
+rehearsed end to end; treat the others as experiments.
 
 ## 1. The idea: knowledge that persists between runs
 
@@ -216,7 +219,7 @@ model finishes reliably given one small task at a time, is the lesson.
 | `blockMesh: command not found` in your own shell | `of2412` (the agents source OpenFOAM themselves) |
 | Kilo: agent says a tool is missing | `kilo mcp list` — all four servers should be `connected`; run `kilo` from the repo root |
 | Kilo local agent: "connection refused" | Ollama is not running: `./scripts/local-model.sh --show`, then `./scripts/local-model.sh` to restart it |
-| Local model stops or writes a tool call as text | reply `continue`; if it keeps failing, try `./scripts/local-model.sh qwen3:30b` (GPU ≥ 24 GB) or use Loop B |
+| Local model stops or writes a tool call as text | reply `continue`; if it keeps failing, try `./scripts/local-model.sh muse-glimmer:30b` (GPU ≥ 24 GB) or use Loop B |
 | Step 2 did not cite the corpus | `./scripts/workshop.sh status` — the entry must be promoted (no `.draft.md`) |
 | `prepare_case` refuses: directory exists | `./scripts/workshop.sh reset` |
 | Doctor warns `mpirun hangs` | serial cases (all of today's) are unaffected |

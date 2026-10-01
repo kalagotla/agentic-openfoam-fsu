@@ -32,7 +32,9 @@
 # HPC: OpenFOAM v2412 ships as one portable Apptainer image (.sif). setup.sh
 # uses, in order: $AOF_OPENFOAM_SIF, the shared path / URL in
 # workshop/hpc-site.env, a copy already in .hpc/, or builds one (compute
-# node only). Model weights go to $OLLAMA_MODELS (default ~/.ollama/models).
+# node only). Ollama and the model weights are symlinked from the shared
+# store in hpc-site.env when present, otherwise downloaded (weights to
+# $OLLAMA_MODELS, default ~/.ollama/models).
 #
 set -euo pipefail
 
@@ -51,12 +53,12 @@ WANT_KILO=true
 HPC=auto
 while (($#)); do
     case "$1" in
-        --model)     MODEL=${2:?--model needs a tag, e.g. qwen3:8b}; shift ;;
+        --model)     MODEL=${2:?--model needs a tag, e.g. gemma4:12b}; shift ;;
         --no-local)  WANT_LOCAL=false ;;
         --no-claude) WANT_CLAUDE=false ;;
         --no-kilo)   WANT_KILO=false ;;
         --hpc)       HPC=true ;;
-        -h|--help)   sed -n '2,36p' "$0"; exit 0 ;;
+        -h|--help)   sed -n '2,38p' "$0"; exit 0 ;;
         *) echo "Unknown option: $1 (see --help)" >&2; exit 2 ;;
     esac
     shift
@@ -290,6 +292,12 @@ fi
 step 5/6 "Local model (Ollama)"
 install_ollama_userspace() {
     # No sudo: the release archive holds bin/ollama plus its GPU runtimes.
+    if [[ -x ${AOF_OLLAMA_SHARED:-}/bin/ollama ]]; then
+        say "Using the shared Ollama in $AOF_OLLAMA_SHARED (no download)."
+        ln -sf "$AOF_OLLAMA_SHARED/bin/ollama" "$HOME/.local/bin/ollama"
+        hash -r
+        return
+    fi
     say "Downloading Ollama (~1.4 GB, user-space)…"
     rm -rf "$HOME/.local/ollama" && mkdir -p "$HOME/.local/ollama"
     curl -fsSL https://ollama.com/download/ollama-linux-amd64.tar.zst \
@@ -306,7 +314,7 @@ if $WANT_LOCAL; then
             curl -fsSL https://ollama.com/install.sh | quiet sh || die "Ollama install failed."
         fi
     fi
-    ok "Ollama $(ollama --version 2>/dev/null | tail -1 | awk '{print $NF}')"
+    ok "Ollama $(ollama --version 2>&1 | tail -1 | awk '{print $NF}')"
     # local-model.sh starts the server if needed, picks + pulls the model,
     # and creates the `cfd-local` alias the Kilo agents use.
     "$REPO_DIR/scripts/local-model.sh" ${MODEL:+"$MODEL"} || die "Local model setup failed."

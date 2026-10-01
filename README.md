@@ -116,8 +116,9 @@ cd agentic-openfoam && ./setup.sh
 
 On the cluster there is no sudo and no apt. OpenFOAM v2412 comes from one
 shared, portable Apptainer image (the cluster's own modules stop at
-OpenFOAM 7 since the AlmaLinux 9 upgrade), and Node, the agents and Ollama
-unpack under `~/.local`. Use the account/partition your instructor gives
+OpenFOAM 7 since the AlmaLinux 9 upgrade). Ollama and the local models are
+linked from the same shared store, so nothing large is downloaded per
+person; Node and the agents unpack under `~/.local`. Use the account/partition your instructor gives
 you. Details, GPU notes and the instructor's one-time image build are in
 [`workshop/hpc.md`](workshop/hpc.md).
 
