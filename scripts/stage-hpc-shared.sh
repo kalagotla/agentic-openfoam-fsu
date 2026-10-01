@@ -40,7 +40,7 @@ fi
 
 # Ollama release
 if [[ -x $DIR/ollama/bin/ollama ]]; then
-    say "Ollama already staged: $("$DIR/ollama/bin/ollama" --version 2>/dev/null | tail -1)"
+    say "Ollama already staged: $("$DIR/ollama/bin/ollama" --version 2>&1 | tail -1 | awk '{print $NF}')"
 else
     say "Downloading Ollama…"
     rm -rf "$DIR/ollama.tmp" && mkdir -p "$DIR/ollama.tmp"
@@ -49,20 +49,11 @@ else
     mv "$DIR/ollama.tmp" "$DIR/ollama"
 fi
 
-# Model weights, pulled by a private server on a spare port into the shared store
-port=$((20000 + RANDOM % 20000))
-export OLLAMA_HOST=127.0.0.1:$port OLLAMA_MODELS=$DIR/ollama-models
-mkdir -p "$OLLAMA_MODELS"
-"$DIR/ollama/bin/ollama" serve >"$DIR/.stage-serve.log" 2>&1 &
-server=$!
-trap 'kill $server 2>/dev/null || true' EXIT
-for _ in $(seq 1 30); do curl -fsS "http://$OLLAMA_HOST/api/version" >/dev/null 2>&1 && break; sleep 1; done
+# Model weights, in an Ollama store layout (blobs/ + manifests/).
 for m in "${MODELS[@]}"; do
-    say "Pulling $m…"
-    "$DIR/ollama/bin/ollama" pull "$m"
+    say "Fetching $m…"
+    "$REPO_DIR/scripts/ollama-fetch.sh" "$DIR/ollama-models" "$m"
 done
-kill $server; wait $server 2>/dev/null || true
-rm -f "$DIR/.stage-serve.log"
 
 chmod -R a+rX "$DIR"
 say "Staged in $DIR:"

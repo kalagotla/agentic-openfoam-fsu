@@ -57,7 +57,7 @@ Open a **new** terminal afterwards so the PATH changes apply.
 
 | Your machine | Model | Download |
 |---|---|---|
-| GPU with ≥ 14 GB, or ≥ 24 GB RAM without one | `gpt-oss:20b` | 13 GB |
+| GPU with ≥ 14 GB, or ≥ 24 GB RAM without one | `gpt-oss:20b` (OpenAI) | 14 GB |
 | smaller GPU, or 12–24 GB RAM | `gemma4:12b` (Google) | 8 GB |
 | less than that | `nemotron-3-nano:4b` (NVIDIA) | 2.8 GB |
 

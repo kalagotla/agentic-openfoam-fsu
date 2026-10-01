@@ -314,7 +314,7 @@ if $WANT_LOCAL; then
             curl -fsSL https://ollama.com/install.sh | quiet sh || die "Ollama install failed."
         fi
     fi
-    ok "Ollama $(ollama --version 2>/dev/null | tail -1 | awk '{print $NF}')"
+    ok "Ollama $(ollama --version 2>&1 | tail -1 | awk '{print $NF}')"
     # local-model.sh starts the server if needed, picks + pulls the model,
     # and creates the `cfd-local` alias the Kilo agents use.
     "$REPO_DIR/scripts/local-model.sh" ${MODEL:+"$MODEL"} || die "Local model setup failed."

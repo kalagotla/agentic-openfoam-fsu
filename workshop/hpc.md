@@ -8,7 +8,8 @@ same `./setup.sh`, the same agents, the same two-step demo. On the cluster
 |---|---|---|
 | OpenFOAM v2412 | apt package | Apptainer image (`.hpc/openfoam-v2412.sif`) |
 | sudo | needed | never |
-| Node.js, Ollama | system packages | unpacked under `~/.local` |
+| Node.js | system packages | unpacked under `~/.local` |
+| Ollama + model weights | downloaded | symlinked from the class's shared store (no download) |
 | Field renders (ParaView) | yes | skipped |
 | Local model | your GPU/CPU | the node's GPU/CPU |
 
@@ -49,19 +50,34 @@ cd agentic-openfoam
 ./setup.sh
 ```
 
-OpenFOAM comes from the shared portable image named in
-`workshop/hpc-site.env` (no per-person build). To use a different copy,
-`export AOF_OPENFOAM_SIF=/path/to/openfoam-v2412.sif` before `./setup.sh`.
-Setup records the path in `~/.bashrc` so the agents find it every session.
+The heavy pieces are already on the cluster, in the class's shared store
+named in `workshop/hpc-site.env`, so setup downloads only the small ones:
 
-Model weights are large (`gpt-oss:20b` is 13 GB). To keep them out of your
-home quota, point Ollama at research storage before `setup.sh`:
+| From the shared store (symlinked, read-only) | Downloaded per person |
+|---|---|
+| OpenFOAM v2412 image (455 MB) | uv + Python packages, Node.js |
+| Ollama (2 GB) | Claude Code, Kilo CLI |
+| model weights (`gpt-oss:20b` alone is 14 GB) | |
 
-```bash
-export OLLAMA_MODELS=/gpfs/research/<group>/$USER/ollama-models
-```
+Your own `~/.ollama/models` then holds only symlinks and the small
+`cfd-local` alias, a few kB of your home quota. To use a different image,
+`export AOF_OPENFOAM_SIF=/path/to/openfoam-v2412.sif` before `./setup.sh`;
+setup records the path in `~/.bashrc` so the agents find it every session.
 
-(and add that to `~/.bashrc` too).
+The shared store has US-developed models only:
+
+| Model | From | Size | Picked for |
+|---|---|---|---|
+| `gpt-oss:20b` | OpenAI | 14 GB | GPU node (the rehearsed default) |
+| `gemma4:12b` | Google | 8 GB | smaller GPU / CPU |
+| `nemotron-3-nano:4b` | NVIDIA | 2.8 GB | small machines |
+| `muse-glimmer:30b` | Meta | 18 GB | try on a 24 GB GPU |
+| `nemotron-3.5-lightning:30b` | NVIDIA | 25 GB | try on a 32 GB+ GPU |
+
+Switch with `./scripts/local-model.sh <model>`; a model in the store links
+instantly. Any other model is downloaded into your own store (through
+`scripts/ollama-fetch.sh`, because `ollama pull` stalls behind RCC's web
+proxy).
 
 ## 3. Each new session
 
@@ -95,18 +111,24 @@ Then continue exactly as in [`README.md`](README.md) §2 (`claude`, `kilo`,
   mode end to end, the shared image running OpenFOAM v2412 including
   `mpirun`, and Kilo connecting all four MCP servers through the image.
 
-## For instructors: the portable OpenFOAM image
+## For instructors: the shared store
 
-OpenFOAM v2412 ships to the class as one read-only file. Build it once,
-on a compute node:
+The OpenFOAM image, Ollama and the model weights ship to the class as one
+read-only directory. Stage it once, on a compute node:
 
 ```bash
-srun -A ame_q -p ame_q -c 16 --mem=64G -t 1:00:00 --pty bash -l
-scripts/build-openfoam-sif.sh /gpfs/research/<group>/agentic-openfoam-shared
+srun -A ame_q -p ame_q -c 16 --mem=64G -t 2:00:00 --pty bash -l
+scripts/stage-hpc-shared.sh /gpfs/research/<group>/agentic-openfoam-shared
 ```
 
-That writes `openfoam-v2412.sif` (455 MB), world-readable, in about 10
-minutes. Point `workshop/hpc-site.env` at it. Every attendee's
-`setup.sh` then uses it directly, with no per-person build. The same file can be
-attached to a GitHub release (set `AOF_OPENFOAM_SIF_URL`) for clusters
-that cannot see your storage.
+It builds `openfoam-v2412.sif` (455 MB, ~10 min, via
+`scripts/build-openfoam-sif.sh`), unpacks Ollama, fetches the five models
+above (~70 GB, ~15 min through the proxy), checks every blob's sha256, and
+makes it all world-readable. Re-running adds only what is missing; pass
+model names to add others
+(`scripts/stage-hpc-shared.sh <dir> gemma4:26b`). Point
+`workshop/hpc-site.env` at the directory. Attendees' `setup.sh` then
+links to it instead of downloading.
+
+The image can also be attached to a GitHub release (set
+`AOF_OPENFOAM_SIF_URL`) for clusters that cannot see your storage.

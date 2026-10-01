@@ -193,6 +193,13 @@ if ollama show "$MODEL" >/dev/null 2>&1; then
     say "$MODEL already pulled."
 elif link_shared_model "$MODEL" && ollama show "$MODEL" >/dev/null 2>&1; then
     say "$MODEL linked from the shared store $AOF_OLLAMA_MODELS_SHARED (no download)."
+elif [[ -n ${HTTPS_PROXY:-${https_proxy:-}} ]] && command -v sbatch >/dev/null; then
+    # Cluster node behind the web proxy: `ollama pull` stalls there, so fetch
+    # with curl into our own store.
+    say "Downloading $MODEL (one-time, via the proxy)…"
+    "$REPO_DIR/scripts/ollama-fetch.sh" "${OLLAMA_MODELS:-$HOME/.ollama/models}" "$MODEL" \
+        || die "Download of $MODEL failed."
+    ollama show "$MODEL" >/dev/null 2>&1 || die "Ollama cannot read $MODEL after download."
 else
     say "Pulling $MODEL (one-time download)…"
     ollama pull "$MODEL"
