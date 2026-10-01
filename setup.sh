@@ -53,7 +53,7 @@ WANT_KILO=true
 HPC=auto
 while (($#)); do
     case "$1" in
-        --model)     MODEL=${2:?--model needs a tag, e.g. qwen3:8b}; shift ;;
+        --model)     MODEL=${2:?--model needs a tag, e.g. gemma4:12b}; shift ;;
         --no-local)  WANT_LOCAL=false ;;
         --no-claude) WANT_CLAUDE=false ;;
         --no-kilo)   WANT_KILO=false ;;

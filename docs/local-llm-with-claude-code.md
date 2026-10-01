@@ -18,7 +18,7 @@ without an Anthropic API key, and your machine can host a tool-use-trained
 curl -fsSL https://ollama.com/install.sh | sh
 ollama serve &
 ollama pull gpt-oss:20b           # recommended; emits real OpenAI-style tool_calls
-# alternatives: qwen3:30b, llama3.1:8b — see https://ollama.com/library?c=tools
+# alternatives: gemma4:12b, muse-glimmer:30b, nemotron-3.5-lightning:30b — see https://ollama.com/library?c=tools
 
 # 2. LiteLLM proxy
 uv tool install 'litellm[proxy]'

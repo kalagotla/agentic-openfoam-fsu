@@ -3,7 +3,7 @@
 # Pick, pull, and wire up the local Ollama model for the workshop.
 #
 #   ./scripts/local-model.sh              # choose a model from this machine's hardware
-#   ./scripts/local-model.sh qwen3:30b    # use a model of your choice
+#   ./scripts/local-model.sh gemma4:12b   # use a model of your choice
 #   ./scripts/local-model.sh --show       # print what is configured now
 #
 # Whatever model you pick is exposed to the agents under ONE fixed name,
@@ -48,16 +48,17 @@ job_cpus() {
     fi
 }
 
-# Tiers. gpt-oss:20b was the strongest local model in docs/evaluation-results.md
-# and is an MoE (~3.6B active), so it is usable even partly on CPU.
+# Tiers, all US-developed open models (OpenAI, Google, NVIDIA). gpt-oss:20b
+# was the strongest local model in docs/evaluation-results.md and is an MoE
+# (~3.6B active), so it is usable even partly on CPU.
 choose_model() {
     local vram=$1 ram=$2
     if (( vram >= 14 )) || (( vram == 0 && ram >= 24 )) || (( vram > 0 && vram + ram >= 32 )); then
         echo gpt-oss:20b
     elif (( ram >= 12 || vram >= 8 )); then
-        echo qwen3:8b
+        echo gemma4:12b
     else
-        echo qwen3:4b
+        echo nemotron-3-nano:4b
     fi
 }
 choose_ctx() {
@@ -184,7 +185,7 @@ if (( VRAM == 0 )); then
     warn "No NVIDIA GPU visible — the local model runs on CPU. Fine for short tasks; a full"
     warn "agent run needs a GPU (the ~18k-token agent prompt alone takes many minutes on CPU)."
 fi
-[[ $MODEL == qwen3:4b ]] && warn "Small machine: qwen3:4b can drive short tasks, but the full local-only run is unlikely to finish cleanly. The frontier + local loop is the better demo here."
+[[ $MODEL == nemotron-3-nano:4b ]] && warn "Small machine: nemotron-3-nano:4b can drive short tasks, but the full local-only run is unlikely to finish cleanly. The frontier + local loop is the better demo here."
 
 ensure_ollama
 

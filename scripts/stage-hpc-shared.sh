@@ -7,7 +7,7 @@
 # Fills <dir> with what every attendee's `setup.sh` would otherwise download:
 #   openfoam-v2412.sif   the portable OpenFOAM image (via build-openfoam-sif.sh)
 #   ollama/              the Ollama release (binary + GPU runtimes, ~1.4 GB)
-#   ollama-models/       model weights (default: every tier local-model.sh picks)
+#   ollama-models/       model weights (default: the US-developed set below)
 # and makes it world-readable. Point workshop/hpc-site.env at it; attendees
 # then symlink to these files instead of downloading them. Re-running only
 # adds what is missing, so it also adds models later.
@@ -20,7 +20,11 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIR=${1:?usage: $0 <shared-dir> [model ...]}
 shift
 MODELS=("$@")
-((${#MODELS[@]})) || MODELS=(gpt-oss:20b qwen3:8b qwen3:4b)
+# Default: the three tiers local-model.sh picks from, plus two larger
+# agent-tuned models for 24 GB+ GPUs. All US-developed (OpenAI, Google,
+# NVIDIA, Meta).
+((${#MODELS[@]})) || MODELS=(gpt-oss:20b gemma4:12b nemotron-3-nano:4b
+                             muse-glimmer:30b nemotron-3.5-lightning:30b)
 
 say() { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 case "$(hostname)" in *login*) echo "Run this on a compute node, not $(hostname)." >&2; exit 1 ;; esac
