@@ -118,7 +118,7 @@ both to the four servers. Run them from the repo root.
 - **GitHub Copilot CLI** (`copilot`) reads this repo's `.mcp.json` as
   workspace servers, and `AGENTS.md` / `CLAUDE.md` as instructions, but
   only in a trusted folder. `setup.sh` adds the repo to `trustedFolders`
-  in `~/.copilot/settings.json`; check with `copilot mcp list`. Sign in with
+  in `~/.copilot/config.json`; check with `copilot mcp list`. Sign in with
   `/login` (GitHub device code). Students and teachers get Copilot Pro free
   through GitHub Education, so this is the no-cost frontier option for
   attendees.

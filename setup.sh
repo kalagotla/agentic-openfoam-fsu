@@ -332,23 +332,25 @@ if $WANT_COPILOT; then
         quiet npm install -g @github/copilot || die "GitHub Copilot CLI install failed."
         ok "GitHub Copilot CLI installed (run 'copilot', then /login)"
     fi
-    # Copilot loads the repo's .mcp.json only from trusted folders. User
-    # settings live in ~/.copilot/settings.json (config.json is Copilot's
-    # own state file and may carry // comments).
-    python3 - "$REPO_DIR" "${COPILOT_HOME:-$HOME/.copilot}/settings.json" <<'PY' \
-        || warn "Could not update ~/.copilot/settings.json; add this repo to its \"trustedFolders\" by hand (or answer Copilot's trust prompt)."
+    # Copilot loads the repo's .mcp.json only from trusted folders. It keeps
+    # that list in ~/.copilot/config.json (its own state file, which starts
+    # with // comments; a copy in settings.json is discarded on start-up).
+    # The same entry Copilot writes when you answer its trust prompt.
+    python3 - "$REPO_DIR" "${COPILOT_HOME:-$HOME/.copilot}/config.json" <<'PY' \
+        || warn "Could not update ~/.copilot/config.json; answer Copilot's \"trust this folder\" prompt the first time you run it here."
 import json, os, re, sys
 repo, path = sys.argv[1:]
-cfg = {}
-if os.path.exists(path) and os.path.getsize(path):
-    text = re.sub(r"^\s*//.*$", "", open(path).read(), flags=re.M)
-    cfg = json.loads(text) if text.strip() else {}
+text = open(path).read() if os.path.exists(path) else ""
+header = "".join(re.findall(r"^\s*//.*\n", text, flags=re.M))
+body = re.sub(r"^\s*//.*$", "", text, flags=re.M)
+cfg = json.loads(body) if body.strip() else {}
 folders = cfg.setdefault("trustedFolders", [])
 if repo not in folders:
     folders.append(repo)
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    json.dump(cfg, open(path, "w"), indent=2)
-    print("  Marked this repo trusted for Copilot (~/.copilot/settings.json)")
+    with open(path, "w") as f:
+        f.write(header + json.dumps(cfg, indent=2) + "\n")
+    print("  Marked this repo trusted for Copilot (~/.copilot/config.json)")
 PY
 fi
 
