@@ -57,10 +57,18 @@ Check the proxy is live: `echo $HTTPS_PROXY` should print
 ## 2. Set up
 
 ```bash
-cd /gpfs/research/<group>/$USER        # or your home
+cd ~
 git clone https://github.com/kalagotla/agentic-openfoam-fsu.git agentic-openfoam
 cd agentic-openfoam
 ./setup.sh
+```
+
+No GitHub access from the cluster? The same repo is on the cluster as a
+tarball; unpack it instead of cloning:
+
+```bash
+cd ~ && tar -xzf /gpfs/research/engineering/dk26/agentic-openfoam-shared/agentic-openfoam.tar.gz
+cd agentic-openfoam && ./setup.sh
 ```
 
 The heavy pieces are already on the cluster, in the class's shared store

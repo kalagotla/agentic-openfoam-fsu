@@ -64,7 +64,7 @@ No account at all? Kilo's free models and the local model need none.
 | Agent | Details |
 |---|---|
 | Claude Code | run `claude` once in the repo; sign in with a Claude Pro/Max account or an API key, and **accept the "trust this folder" prompt** (until you do, the repo's MCP servers and pre-approved tools stay off) |
-| Kilo (frontier models) | nothing needed for the free models (`kilo/kilo-auto/free` and the `:free` list in `/models`); `kilo auth login` for a Kilo account, or `export ANTHROPIC_API_KEY=...` to use your own key |
+| Kilo (frontier models) | nothing needed for the free models: pick a US-developed one in `/models`, e.g. `kilo/nvidia/nemotron-3-ultra-550b-a55b:free` (NVIDIA) or `kilo/poolside/laguna-s-2.1:free` (Poolside). Avoid `kilo/kilo-auto/free`, which may route to non-US models; `kilo auth login` for a Kilo account, or `export ANTHROPIC_API_KEY=...` to use your own key |
 | Kilo (local model) | nothing — it talks to Ollama on your machine |
 
 ### Which local model did I get?
@@ -173,7 +173,9 @@ kilo
 ```
 
 Press **Tab** until the agent reads `cfd-orchestrator`, then choose a
-frontier model with `/models` (a free `kilo/...:free` model works). Prompt:
+frontier model with `/models` (the free `kilo/nvidia/nemotron-3-ultra-550b-a55b:free`
+works; free gateways sometimes time out mid-run, so if Kilo stops with
+"Upstream idle timeout", type `continue`). Prompt:
 
 ```
 Set up and run cases/scenarios/lid-cavity-re1000.yaml
