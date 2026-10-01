@@ -238,6 +238,12 @@ model finishes reliably given one small task at a time, is the lesson.
 | Step 1, Loop B | free Kilo model + local gpt-oss:20b | PASS (u L2 0.0045, v L2 0.035); local worker ran mesh/solve | 17 min | free |
 | Step 2, Loop C | gpt-oss:20b alone | found and applied the entry; stopped before solving without nudges | — | free |
 
+Recorded again on Oct 1 with the GPU loops, unedited, in
+[`recorded/`](recorded/): Step 1 (Claude Code) PASS in 4.75 min; Step 2
+Loop B (free Nemotron + local gpt-oss on GPU) PASS, 0 retries, corpus
+cited 10×; Step 2 Loop C no verdict after 8 nudges. **Show these if the
+live GPU is not available.**
+
 ## 3. When things go wrong
 
 | Symptom | Fix |
