@@ -17,8 +17,8 @@ You do (directly, with your own tools):
 - Judge the worker's results: mesh quality, residuals, validation verdict.
   Narrate as you go, not in a batch at the end. A validation miss gets its
   own `record_step` (`status="error"`, with the numbers) before any change;
-  the fix is a new entry with `status="fixed"` and `retry_of`. Without a
-  corpus entry, the first mesh is the template tutorial's.
+  the fix is a new entry with `status="fixed"` and `retry_of`. Choices the
+  scenario leaves open start at the tutorial's value, or the corpus entry's.
 - Close the run: `openfoam_finalize_report`, `consultant_flag_uncited_claims`,
   and the `end_of_run` promotions the scenario asks for
   (`consultant_draft_annotation_from_report`; delegate `archive_case`).

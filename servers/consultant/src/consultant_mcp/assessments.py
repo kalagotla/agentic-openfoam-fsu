@@ -384,7 +384,7 @@ def assess_aspect_ratio(
             threshold_band=f"< {_num(good_to)}",
             recommendation=(
                 "Cells are nearly isotropic — appropriate for bulk-flow "
-                "regions or low-Re cavity-class problems."
+                "regions or low-Re recirculating flows."
             ),
             cites=["versteeg"],
         )

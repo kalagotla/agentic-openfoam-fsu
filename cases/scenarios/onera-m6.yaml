@@ -1,26 +1,7 @@
-# Scenario: ONERA M6-planform wing at subsonic conditions (M=0.3).
-#
-# 3-D STL-driven case. Exercises:
-#   - snappyHexMesh on a real wing geometry
-#   - Prism-layer addition on a swept surface
-#   - Force-coefficient extraction
-#   - Parallel decomposition + reconstruction
-#
-# Geometry note: NACA 0010 sections approximate the real ONERA M6
-# section to keep the case laptop-runnable. Planform (root chord, tip
-# chord, semi-span, sweep) is faithful. Quantitative AGARD AR-138
-# comparison requires the real section — see
-# cases/examples/onera-m6/reference/README.md for how to swap.
-#
-# Runtime budget on 4 cores:
-#   - Background blockMesh:    ~30 s
-#   - snappyHexMesh + layers:  ~10-15 min
-#   - simpleFoam (500k cells): ~15-25 min
-#   - Reconstruct + render:    ~2 min
-# Total: ~30-45 min on a laptop.
-#
-# Sections follow the standard scenario order (see cases/scenarios/README.md).
-
+# Scenario: ONERA M6-planform wing, subsonic (M = 0.3), meshed from an STL
+# with snappyHexMesh, run in parallel. Sections are NACA 0010 (an
+# approximation of the M6 section); see cases/examples/onera-m6/reference/README.md.
+# Sections follow cases/scenarios/README.md.
 name: onera-m6
 description: >
   Swept-tapered half-span wing with the ONERA M6 planform at M = 0.3,
@@ -29,12 +10,10 @@ description: >
   Validate against qualitative target ranges; pointers to quantitative
   AGARD AR-138 comparison are in cases/examples/onera-m6/reference/README.md.
 
-# Level 2 (Review): the agent pauses after each phase for researcher
-# confirmation.
 automation_level: 2
 
 physics:
-  regime: incompressible           # M=0.3 is comfortably incompressible
+  regime: incompressible
   steady: true
   flow_type: turbulent
   turbulence_model: kOmegaSST
@@ -45,17 +24,12 @@ geometry:
   shape: swept-tapered-wing-3D
   stl_path: cases/examples/onera-m6/geometry/m6_wing.stl
   patch_name: wing
-  # Non-dimensional planform (root chord = 1 m). The STL is shipped at
-  # this scale; rescale via blockMesh if a different chord is needed.
+  # Planform at root chord = 1 m (the STL's scale).
   root_chord_m: 1.0
   tip_chord_m: 0.5626
   semi_span_m: 1.4846
   le_sweep_deg: 30.0
-  # Background domain: ~20 chord-lengths in each direction. The wing
-  # is mounted on the symmetry plane at y=0 in the STL — but here the
-  # background blockMesh extends symmetrically through y=0, and the
-  # full wing is captured. (For a half-wing-with-symmetry treatment,
-  # clip the domain at y=0 and use a symmetryPlane patch.)
+  # Half-span: the wing root sits on the y = 0 symmetry plane.
   background_domain:
     x_min: -10.0
     x_max:  20.0
@@ -75,7 +49,7 @@ mesh:
   layers:
     n_surface_layers: 4
     expansion_ratio: 1.3
-    first_layer_thickness_m: 5.0e-4   # y+ ~ 30 at the workshop conditions
+    first_layer_thickness_m: 5.0e-4
   cells_recommended_target: 500000
 
 fluid:
@@ -84,9 +58,7 @@ fluid:
 
 flow_conditions:
   free_stream_velocity_magnitude: 15.0     # m/s, gives Re_root = 1e6 at nu = 1.5e-5
-  mach: 0.3                                # ~ 100 m/s at sea level; this scenario
-                                           # uses 15 m/s + small nu for M_eff much
-                                           # smaller, so incompressible solver is fine
+  mach: 0.3
   angle_of_attack_deg: 5.0
 
 boundary_conditions:
@@ -138,23 +110,7 @@ validation:
     - "no spurious flow separation on the lower surface at alpha = 5 deg"
     - "lift distribution shows tip-loss (Cl drops toward the tip)"
 
-notes:
-  expected_first_attempt: >
-    On the recommended 500k-cell mesh: Cl ~ 0.30-0.40, Cd ~ 0.015-0.025,
-    residuals drop 4-5 orders, runtime 30-45 min on 4 cores. Coarser
-    meshes are acceptable for a first try; refine if Cl falls outside
-    the qualitative target range or the upper-surface Cp peak is
-    smeared.
-  advanced_variant: >
-    The real ONERA M6 transonic case uses M = 0.8395, alpha = 3.06 deg
-    with a compressible solver (rhoSimpleFoam). Requires shock-capture
-    schemes and finer near-shock refinement (~5M cells, multi-hour
-    runtime). Not laptop-runnable; see cases/examples/onera-m6/reference/README.md.
 
-# Post-run promotions. Both default to NO — they modify tracked content
-# (the cases/examples/ baselines and the corpus) that the researcher may want
-# to review by hand first. Flip to true here if you want the agent to do them
-# automatically at end-of-run.
 end_of_run:
   archive_case: false        # if true, openfoam.archive_case(case, scenario_name) → cases/examples/<name>/baseline/
   draft_corpus: false        # if true, consultant.draft_annotation_from_report(case, tutorial_path) → corpus/<...>.draft.md

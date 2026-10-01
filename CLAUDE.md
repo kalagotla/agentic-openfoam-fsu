@@ -1,8 +1,28 @@
 # Working in this repo
 
-This repo ships four MCP servers under `servers/` plus a primary
-validation case (`cases/lid-cavity/`, against Ghia 1982). Additional
-cases live under `cases/examples/`.
+This repo ships four MCP servers under `servers/`, scenario files under
+`cases/scenarios/`, and reference data for validation under
+`cases/*/reference/` and `cases/examples/*/reference/`.
+
+## Sources of truth
+
+Every setup choice comes from one of two places, in this order:
+
+1. **The OpenFOAM tutorial** you adopt as the template — its dictionaries,
+   mesh, schemes and controls are the starting point for everything the
+   scenario does not specify.
+2. **A promoted corpus entry** for that tutorial
+   (`consultant.get_tutorial_annotation`) — knowledge earned by an earlier
+   validated run and reviewed by a human. Where it exists, it overrides
+   the tutorial's defaults, and you cite it.
+
+Beyond those, only **evidence from this run** (a failed check, a
+validation miss) justifies a change. Not memory of how this benchmark is
+"usually" set up, not a value seen in a paper or forum (those may support
+a `why` citation, never a setup value up front), and not other runs in
+this repo: do not read `workshop/` (walkthrough and recorded runs),
+`docs/evaluation-*`, other `cases/work/*` directories, or
+`cases/examples/*/baseline/` while setting up a case.
 
 ## How to set up a CFD case (the workflow that matters)
 
@@ -68,8 +88,7 @@ runnable OpenFOAM case at `cases/work/<name>/` from that description.
    `reconstruct_par` to stitch time directories back together before
    postprocessing.
 7. Read residuals (`get_residuals`, summary mode), then validate against
-   the reference data under `cases/lid-cavity/reference/` (focus case) or
-   `cases/examples/<name>/reference/` (other starters). **Validation is
+   the reference data the scenario names in `validation.reference`. **Validation is
    agent-authored analysis, not a fixed tool.** A fixed metric vocabulary
    can't span the space (Cd/Cl, Cp, Cf, reattachment, Strouhal, Nusselt,
    shock angle, spectra), so:
@@ -201,9 +220,9 @@ forms are allowed:
   a new external source, add it to `corpus/references/manifest.json` — pulled
   information goes into the library, it does not live only in a `why` line.
 - **First principles.** A derivation the reader can check (e.g. "a steady
-  solver presumes a steady solution exists; the 2-D cavity becomes
-  time-periodic at high Re, so a steady solve stalls there — the stall is
-  itself the diagnostic"), with no appeal to an unsourced number.
+  solver presumes a steady solution exists; if the flow is inherently
+  unsteady the steady solve stalls — the stall is itself the diagnostic"),
+  with no appeal to an unsourced number.
 
 If you have only unsourced recall of a fact, derive it from first principles or
 drop the specific claim — do not state it, and do not invent a citation. After
@@ -320,8 +339,8 @@ flags are independent; honor each on its own.
 **When `draft_corpus` is `true`, complete the draft — don't hand back a
 blank scaffold.** You ran the case, so fill the frontmatter you know by
 passing it to `draft_annotation_from_report`: `solver`, `physics`,
-`geometry` (facts from the run, generalised to the tutorial — say
-"low-Re laminar cavity," not "Re=400"), `references` (the paper/doc
+`geometry` (facts from the run, generalised to the tutorial — describe
+the regime class, not this run's exact parameter values), `references` (the paper/doc
 citations you used), and your *proposed* `suitable_for` /
 `not_suitable_for` (generalise them from your `when_it_breaks` reasoning;
 the tool marks them "agent-proposed, confirm" so the reviewer knows to
@@ -350,14 +369,14 @@ dataset name) so a later re-run can be compared against an attributed
 baseline, not a bare number.
 
 - **Do NOT read or copy from `cases/examples/<name>/baseline/`.** Baseline
-  directories under `cases/examples/` (e.g. pitz-daily) are reference
-  cases for validation comparison, not authoring templates. The tutorials
-  library (`$FOAM_TUTORIALS`) is where you go for templates.
+  directories under `cases/examples/` are reference cases for validation
+  comparison, not authoring templates. The tutorials library
+  (`$FOAM_TUTORIALS`) is where you go for templates (see Sources of truth).
 - **Output goes to `cases/work/<scenario-name>/`** — a fresh directory. If
   it already exists from a prior attempt, ask before overwriting.
-- **Web access is allowed and encouraged** for unfamiliar physics: NASA
-  TMR, the OpenFOAM user guide, CFD-Online, vendor docs. Use WebFetch or
-  WebSearch and cite the URL in your narration.
+- **Web access is allowed** for unfamiliar physics: NASA TMR, the OpenFOAM
+  user guide, CFD-Online, vendor docs. Use it to explain and cite, not to
+  pick setup values ahead of the tutorial and the corpus. Cite the URL.
 - **Every tool returns `{success: bool, ...}`.** Read `reason` and
   `log_tail` on failure and recover. Don't ignore failures.
 - **Don't dump raw fields, meshes, or full logs into your context.** Use
@@ -377,8 +396,9 @@ baseline, not a bare number.
 | `cases/work/<name>/` | Cases you author (gitignored) |
 | `cases/work/<name>/analysis/validate.py` | The validation script you author; run via `validation.run_analysis` |
 | `cases/work/<name>/postProcessing/analysis/` | Plots + `metrics.json` the script writes (archived for replay) |
-| `cases/examples/pitz-daily/baseline/` | Validation reference — read-only |
-| `cases/examples/pitz-daily/reference/` | Armaly 1983 digitized data |
+| `cases/*/reference/`, `cases/examples/*/reference/` | Reference data for validation (load with `validation.read_reference`) |
+| `cases/examples/*/baseline/` | Archived validated runs — do not read while setting up |
+| `workshop/`, `docs/evaluation-*` | For humans: walkthrough, recorded runs, scores — do not read while setting up |
 | `corpus/` | The consultant's knowledge layer — "why this choice" annotations earned from validated runs (or hand-authored), cited by `consultant.get_tutorial_annotation`. Ships empty. |
 | `servers/openfoam/` | OpenFOAM MCP tools — actions (mesh, solve, dict I/O, narration) |
 | `servers/validation/` | Validation MCP tools — reference comparison primitives + `run_analysis` (runs the agent-authored analysis script) |

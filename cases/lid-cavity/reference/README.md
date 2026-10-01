@@ -32,25 +32,11 @@ carry no suspected typo (unlike the `Re = 400` v-centerline; see below).
 - Reynolds number: `Re = U_lid * L / ν`.
 - Top wall moves in +x at `U_lid`; the other three walls are no-slip.
 
-The OpenFOAM `cavity` tutorial uses the same geometry but at `Re = 10`, so it can't be used as a validation reference directly. The shipped scenario picks `Re = 400` — high enough that the secondary corner vortices appear, low enough that a laminar simulation converges quickly.
-
 ## Tolerance
 
 Default acceptance threshold is **5% relative L2 error** between the
 simulated profile and the reference at the matching Re. This is
 standard practice in the cavity-benchmark community.
-
-The grid resolution that meets it is **not known in advance** — establish
-it by refining the mesh until the centerline profiles stop changing and
-converge toward this reference (a grid-convergence / mesh-independence
-study), rather than assuming a cell count up front. The only sourced grid
-anchor is Ghia, Ghia & Shin's own solution, computed on a **129×129
-uniform mesh**; a converged 2nd-order solver should approach the 5% band
-as the grid is refined toward that resolution. There is no published
-source for a "known-good" cell count below that, so don't cite one —
-demonstrate the convergence instead. Start from the template tutorial's
-grid (or from a corpus entry, if one exists) and refine on evidence; do not
-jump straight to 129×129. The refinement study is part of the record.
 
 ## Provenance
 

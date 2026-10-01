@@ -1,26 +1,5 @@
-# Scenario: 2-D lid-driven cavity at Re = 400 (Ghia 1982 reference).
-#
-# Workshop Step 1 (discover) — see workshop/README.md. The corpus under corpus/ ships empty by
-# design — running this case to a validated result and promoting a
-# corpus/incompressible/icoFoam/cavity/cavity.md entry from the REPORT
-# is the live demonstration of the build-from-runs loop.
-#
-# A classic CFD benchmark that the OpenFOAM tutorials library does not
-# ship in this exact form: the closest tutorial is
-# incompressible/icoFoam/cavity at Re=10, which uses a transient solver
-# and a coarse 20x20 mesh. The agent's job is to adapt that tutorial's
-# structural patterns (geometry, patch layout) to a steady, Re=400 case,
-# start from the tutorial's own mesh, and validate the centerline velocity
-# profiles against Ghia, Ghia & Shin (1982), refining only when validation
-# says so.
-#
-# Output: cases/work/<name>/REPORT.md narrating each decision. Whatever
-# this run has to discover (and fix) on the way to a validated result is
-# what the corpus entry records for the next run.
-#
-# Sections follow the standard scenario order (see cases/scenarios/README.md):
-# physics -> geometry -> mesh -> fluid -> flow_conditions ->
-# boundary_conditions -> solver -> controls -> validation -> end_of_run.
+# Scenario: 2-D lid-driven cavity at Re = 400, validated against
+# Ghia, Ghia & Shin (1982). Sections follow cases/scenarios/README.md.
 
 name: lid-cavity
 description: >
@@ -37,37 +16,23 @@ automation_level: 3
 physics:
   regime: incompressible
   steady: true
-  flow_type: laminar              # Re=400 is firmly in the steady-laminar regime
+  flow_type: laminar
   reynolds_number_definition: >
     Re = U_lid * L / nu, where L is the cavity side length and U_lid
-    is the moving-lid velocity. This is the convention used in the
-    Ghia 1982 reference data and in essentially every cavity benchmark
-    paper since.
+    is the moving-lid velocity (the convention of the reference data).
 
 geometry:
   shape: 2d-square-cavity
-  side_length_m: 1.0              # cavity side L
-  # The OpenFOAM cavity tutorial uses the same square geometry at L=0.1.
-  # We use L=1 here so that the simulation u, v values are directly
-  # comparable to Ghia's non-dimensional tabulation without rescaling.
+  side_length_m: 1.0              # L = 1 and U_lid = 1, so u, v compare
+                                  # directly with the non-dimensional reference
   template_tutorial: incompressible/icoFoam/cavity
 
 mesh:
   strategy: blockMesh             # structured grid on the square; no STL/snappy
   dimension: 2d                   # single cell in z; empty front/back patches
-  # Start from the template tutorial's own mesh (its blockMeshDict as is).
-  # Do not pick a finer grid up front: run, validate, and refine only if the
-  # centerline profiles miss Ghia, until they pass and stop changing (a
-  # grid-convergence study). The refinements, and why each was needed, are
-  # the evidence this run exists to record.
-  guidance: "start from the template tutorial mesh; refine only when validation misses Ghia"
 
 fluid:
-  # Choose nu to give Re = U_lid * L / nu = 400 with U_lid = 1 m/s, L = 1 m.
-  # The case is non-dimensional in spirit; these SI values are chosen so
-  # the simulation's u, v fields are numerically equal to Ghia's
-  # non-dimensional u/U_lid, v/U_lid values.
-  kinematic_viscosity: 0.0025     # m^2/s
+  kinematic_viscosity: 0.0025     # m^2/s; nu = U_lid * L / Re
 
 boundary_conditions:
   moving_lid:
@@ -82,36 +47,20 @@ boundary_conditions:
     type: empty                   # 2-D case
 
 solver:
-  application: simpleFoam         # steady incompressible (realises physics.steady)
-  # Discretisation schemes, relaxation, and convergence controls are adopted
-  # from the structural tutorial and changed only if a check fails — not
-  # preset here.
+  application: simpleFoam
 
 controls:
-  # End-time is the iteration count for the steady SIMPLE loop.
-  end_time: 5000
+  end_time: 5000                  # iterations of the steady loop
   write_interval: 1000
 
 validation:
-  # The benchmark dataset this case is scored against.
   reference: cases/lid-cavity/reference/ghia_1982.json
-
-  # Analysis spec: which agent-authored script runs, against which reference,
-  # and the human-readable acceptance intent. The YAML declares intent, not
-  # mechanism — a fixed tool/metric vocabulary cannot span the validation
-  # space (Cd/Cl, Cp, Cf, reattachment, Strouhal, Nusselt, shock angle,
-  # spectra), so the script owns the case-specific extraction + math and
-  # compare_profiles owns the verdict. The agent runs the script via
-  # validation.run_analysis(case_path, script=...).
   analysis:
     script: analysis/validate.py    # case-relative; the agent authors it
     args: []                        # optional argv forwarded to the script
     timeout_s: 120                  # optional; defaults to the tool default
 
-    # Human-readable acceptance intent — what "pass" means, for the reviewer
-    # and the agent authoring the script. The script computes the verdict via
-    # compare_profiles; these rows are documentation, not executed.
-    checks:
+    checks:                         # what "pass" means
       - quantity: u_centerline               # u(y) sampled at x = 0.5
         reference_dataset: ghia_re_400_u_centerline
         tolerance_relative_L2: 0.05
@@ -124,10 +73,6 @@ validation:
     - "primary vortex visible centered near (x ~ 0.55, y ~ 0.60)"
     - "two secondary vortices visible in the lower corners"
 
-# Post-run promotions. Both default to NO — they modify tracked content
-# (the cases/examples/ baselines and the corpus) that the researcher may want
-# to review by hand first. Flip to true here if you want the agent to do them
-# automatically at end-of-run.
 end_of_run:
   archive_case: true        # if true, openfoam.archive_case(case, scenario_name) → cases/examples/<name>/baseline/
   draft_corpus: true        # if true, consultant.draft_annotation_from_report(case, tutorial_path) → corpus/<...>.draft.md

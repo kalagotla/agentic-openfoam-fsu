@@ -11,7 +11,8 @@ turn.
 **Where things are.** The OpenFOAM tutorials are NOT files in this repo.
 Reach them only with `openfoam_list_tutorials` and
 `openfoam_read_tutorial_file` (paths like
-`incompressible/icoFoam/cavity/cavity/system/blockMeshDict`), and copy
+`<category>/<solver>/<case>/system/controlDict`, as listed by
+`openfoam_list_tutorials`), and copy
 them with `openfoam_copy_tutorial_dict`. Repo files you may `read`:
 `cases/scenarios/*.yaml`. Your case lives at `cases/work/<name>/`. Reasoning belongs in `openfoam_record_step`, not
 in long internal deliberation.
@@ -21,11 +22,11 @@ does it** and it returned `success: true`.
 
 ## Your loop
 
-1. **Read the scenario** with `read` (e.g. `cases/scenarios/lid-cavity.yaml`).
+1. **Read the scenario** with `read` (`cases/scenarios/<name>.yaml`).
    Note `name`, `automation_level`, the solver, and `end_of_run`.
 2. **Ask the corpus first.** Call `consultant_get_tutorial_annotation` for
-   the tutorial you will template from (lid cavity:
-   `incompressible/icoFoam/cavity/cavity`). If it returns an entry, APPLY
+   the tutorial you will template from (its full path, as listed by
+   `openfoam_list_tutorials`). If it returns an entry, APPLY
    it — it is setup knowledge earned by an earlier validated run — and
    cite its path in your `record_step` citations. If it returns
    `no_annotation`, proceed from the tutorial and leave `why` fields empty
@@ -53,25 +54,12 @@ does it** and it returned `success: true`.
    (`openfoam_archive_case`, `consultant_draft_annotation_from_report`).
    Then stop with a short summary.
 
-## Lid-cavity gotchas (each one has aborted real runs)
+## Where setup knowledge comes from
 
-- The scenario wants steady `simpleFoam`, but the geometry tutorial
-  (`icoFoam/cavity`) is transient. Take `blockMeshDict`, `0/U`, `0/p`,
-  `transportProperties` from `incompressible/icoFoam/cavity/cavity`, and
-  `controlDict`, `fvSchemes`, `fvSolution` from
-  `incompressible/simpleFoam/pitzDaily` — a transient `ddtSchemes Euler`
-  aborts simpleFoam.
-- In `controlDict` set `application simpleFoam;` and add a `sets`
-  function object sampling `U` along x = 0.5 and y = 0.5 (`setFormat raw`)
-  so validation has data to read.
-- Closed domain: add `pRefCell 0; pRefValue 0;` to the `SIMPLE` block of
-  `fvSolution`, or the solver aborts with "Unable to set reference cell".
-- simpleFoam needs `constant/turbulenceProperties` with
-  `simulationType laminar;` — author it with `openfoam_write_dict`.
-- simpleFoam's `transportProperties` needs `transportModel Newtonian;`
-  next to `nu`.
-- A laminar run still needs `div((nuEff*dev2(T(grad(U)))))` in
-  `fvSchemes` (pitzDaily has it).
+Only from the template tutorial and a promoted corpus entry for it. Copy
+from the tutorial; where a corpus entry exists, apply it and cite it.
+Change anything else only when a tool tells you something failed — then
+read `log_tail`, fix the dict it names, and record the fix.
 
 ## Narration
 

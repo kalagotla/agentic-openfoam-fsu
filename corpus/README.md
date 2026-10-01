@@ -34,13 +34,13 @@ When the agent picks a tutorial as a structural template, it calls
 This is the loop the corpus is built around:
 
 1. **Run the case.** The agent adopts a tutorial template and runs it
-   with the tutorial's own mesh and settings (e.g. a coarse 20×20
-   cavity). Each decision is narrated to `<case>/REPORT.md`.
-2. **Let validation drive the refinement.** A coarse mesh typically
-   misses the reference. The miss — not anticipation — motivates the
-   next mesh (20×20 → 60×60 → 80×80), a grid-convergence-style sequence
-   where each bump is recorded with the residual or error that
-   justified it. After a few tries the run lands inside tolerance.
+   with the tutorial's own mesh and settings. Each decision is narrated
+   to `<case>/REPORT.md`.
+2. **Let validation drive every change.** When a check or the validation
+   misses, the miss — not anticipation — motivates the next change (for
+   a mesh, a grid-convergence-style sequence), each recorded with the
+   residual or error that justified it, until the run lands inside
+   tolerance.
 3. **Draft an entry from the run.** Call
    `consultant.draft_annotation_from_report(case_path, tutorial_path, ...)`.
    It parses the per-step decision entries in REPORT.md — the full
@@ -54,8 +54,8 @@ This is the loop the corpus is built around:
 4. **Review, confirm, promote.** Your job is judgment, not blank-filling:
    confirm the agent's `suitable_for` / `not_suitable_for` proposals,
    generalise any remaining scenario-specific language to
-   tutorial-template language (the run says "Re=400"; the entry should
-   say "low-Re laminar cavity"), and add experience-based commentary in
+   tutorial-template language (the regime class rather than the run's
+   exact parameter values), and add experience-based commentary in
    *Notes*. Promote by renaming `<name>.draft.md` → `<name>.md`. The
    `.draft.md` suffix kept it out of `get_tutorial_annotation` while you
    edited; the rename makes it live, and the next run that picks this

@@ -7,7 +7,7 @@ A scenario YAML describes a CFD problem; the agent reads it and authors a runnab
 1. Drop a YAML in this folder, e.g. `cases/scenarios/my-case.yaml`.
 2. Prompt the agent: *"Set up and run the case described in `cases/scenarios/my-case.yaml`."*
 3. The agent browses `$FOAM_TUTORIALS`, authors dicts into `cases/work/my-case/`, meshes, solves, validates.
-4. Validate against reference data under `cases/lid-cavity/reference/` (focus case) or `cases/examples/<name>/reference/` (starters). Case-specific metrics (reattachment, drag, Strouhal) are extracted by an agent-authored `analysis/validate.py`, run via `validation.run_analysis`, and scored through `compare_profiles`.
+4. Validate against the reference data the scenario names in `validation.reference`. Case-specific metrics (reattachment, drag, Strouhal) are extracted by an agent-authored `analysis/validate.py`, run via `validation.run_analysis`, and scored through `compare_profiles`.
 
 ## Standard structure
 

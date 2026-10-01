@@ -14,7 +14,8 @@ Two rules models most often skip — follow them:
 - Every failure gets its own entry: a validation miss is recorded with
   `status="error"` and its numbers before you change anything, and the fix
   is a new entry with `status="fixed"` and `retry_of="<title of the miss>"`.
-  The first mesh is the template tutorial's; a refinement is a fix of a
+  Every choice the scenario leaves open starts at the template tutorial's
+  value, or a promoted corpus entry's; changing it later is a fix of a
   recorded miss, never a silent first choice.
 
 {file:./CLAUDE.md}
