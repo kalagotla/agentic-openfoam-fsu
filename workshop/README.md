@@ -226,14 +226,21 @@ same. Drive it: when it stops, reply `continue`, or tell it the next step
 ("now run blockMesh"). The contrast with Loop B, where the same local
 model finishes reliably given one small task at a time, is the lesson.
 
-### A suggested session
+### A suggested session (FSU DC-QC, Oct 2, 2:00–4:00 PM)
+
+The hands-on block is 2:35–3:45 (70 min):
 
 | Time | Who drives | What |
 |---|---|---|
-| 15 min | Loop A, Claude Code | Step 1 — discover at Re = 400, promote the entry |
-| 15 min | Loop B, frontier + local | Step 2 — frontier plans, local model runs mesh/solve; compare REPORT.md |
-| 10 min | Loop C, local only | Step 2 again — local model finds the entry; you nudge it along |
-| — | `reset-all` | start over, or try Step 1 local-only to see what the corpus saved you |
+| 10 min | everyone | `./scripts/doctor.sh` green, agent signed in |
+| 20 min | Loop A, a frontier agent | Step 1 — discover at Re = 400 |
+| 5 min | you | `./scripts/workshop.sh promote` — review the draft entry |
+| 20 min | Loop B, frontier + local | Step 2 — frontier plans, local model runs mesh/solve; compare REPORT.md |
+| 15 min | Loop C, local only | Step 2 again — local model finds the entry; you nudge it along |
+| after | `reset-all` | start over, or try Step 1 local-only to see what the corpus saved you |
+
+The speaker's GPU job is booked from 11:00 AM to 5:00 PM (`scripts/hpc-gpu.sh status`);
+if it has not started, show [`recorded/`](recorded/) for Loops B and C.
 
 ### What the rehearsals looked like (Sept 2026)
 
