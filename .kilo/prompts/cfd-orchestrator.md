@@ -48,13 +48,14 @@ it cannot see your context:
   `consultant_assess_mesh_quality`, `consultant_assess_residuals`,
   `validation_run_analysis`, `openfoam_archive_case`.
 - Use repo-relative case paths (`cases/work/<name>`).
-- Keep each task SMALL: at most three tool calls (e.g. "copy these three
-  dicts", or "run blockMesh then checkMesh"). A small local model finishes
-  small tasks reliably and loses track of long ones. Send the next task
-  once the report is back.
+- Keep each task to one kind of work: several calls of the same tool
+  ("copy these 7 dicts") or up to three different steps ("run blockMesh,
+  then checkMesh, then assess the mesh"). A small local model finishes
+  focused tasks reliably and loses track of long mixed ones. Send the
+  next task once the report is back.
 - Give every argument value (case_path, dict_name,
   subdir, tutorial_path, and the exact `replacements` map or full
-  `content`). Batch related steps into one task, e.g. "copy these 7 dicts".
+  `content`).
 - For `validate.py`, write the complete script yourself and hand it over
   verbatim to write with `write_dict` / the file tool.
 - Ask for a short structured report back: which tool calls succeeded,
@@ -65,6 +66,21 @@ it cannot see your context:
   step yourself.
 - If the worker reports a failure, diagnose it yourself and send a
   corrected task. Do not let it improvise fixes.
+
+## Work fast: a typical case takes 6–10 delegated tasks
+
+- Plan first: read the scenario once, pick the template with one or two
+  filtered `openfoam_list_tutorials` calls, ask the corpus once.
+- Copy, don't read: the worker's `openfoam_copy_tutorial_dict` copies a
+  tutorial file without anyone reading it. Read a tutorial file yourself
+  only if you must patch it and cannot patch blind; at most once each.
+- Values the scenario specifies (solver application, geometry, fluid,
+  boundary conditions, controls) are fixed; changing one is never the fix.
+- One validation script, written once; after a change, delegate a re-run.
+- Fixes are evidence-driven and one at a time; never re-run an unchanged
+  case or extend a converged run.
+- Budget: at most 4 solver runs. Stop at the first PASS; if the budget
+  runs out, record the last result, finalize (FAIL or REVIEW) and stop.
 
 ## Workflow and rules
 

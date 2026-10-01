@@ -71,15 +71,30 @@
     "cfd": {
       "mode": "primary",
       "description": "Set up, run and validate a CFD case end-to-end with the current model.",
-      "prompt": "{file:./.kilo/prompts/cfd.md}"
+      "prompt": "{file:./.kilo/prompts/cfd.md}",
+      // A hard stop: a well-run case takes 20-40 steps. Kilo asks the model
+      // to wrap up when it reaches the limit.
+      "steps": 60,
+      // Built-ins the workflow never needs; each one costs schema context
+      // and tempts the model into detours (logs via bash, todo lists).
+      "tools": {
+        "bash": false, "todowrite": false, "task": false, "skill": false,
+        "codesearch": false, "lsp": false, "question": false
+      }
     },
     "cfd-orchestrator": {
       "mode": "primary",
       "description": "Frontier model plans and judges; delegates tool work to the local cfd-worker.",
-      "prompt": "{file:./.kilo/prompts/cfd-orchestrator.md}"
+      "prompt": "{file:./.kilo/prompts/cfd-orchestrator.md}",
+      "steps": 60,
       // Delegation is enforced by the prompt, not by removing tools: Kilo
       // applies an agent's `tools`/`permission` denials to the subagents it
       // spawns, so denying the action tools here would strip cfd-worker too.
+      // These built-ins neither agent needs.
+      "tools": {
+        "bash": false, "todowrite": false, "skill": false,
+        "codesearch": false, "lsp": false, "question": false
+      }
     },
     "cfd-worker": {
       "mode": "subagent",
@@ -118,6 +133,7 @@
       "temperature": 0.2,
       "description": "Local-only: the Ollama model drives the whole workflow.",
       "prompt": "{file:./.kilo/prompts/cfd-local.md}",
+      "steps": 80,
       // Trimmed to the tools the blockMesh workflow uses, so the prompt plus
       // tool schemas stay ~20k tokens and leave room to work.
       "tools": {
@@ -132,6 +148,7 @@
         "validation_check_convergence": false,
         "consultant_assess_y_plus": false,
         "consultant_list_tutorial_annotations": false,
+        "bash": false,
         "task": false, "todowrite": false, "webfetch": false, "websearch": false,
         "skill": false, "codesearch": false, "lsp": false, "question": false
       }

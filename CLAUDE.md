@@ -100,6 +100,10 @@ runnable OpenFOAM case at `cases/work/<name>/` from that description.
      `postProcessing/analysis/`, and (e) prints `<<<ANALYSIS_RESULT>>>`
      then one line of JSON `{"metrics": {...}, "plots": [...]}` as its last
      output.
+   - `validation_mcp.analysis` handles the generic parts:
+     `latest_set(".", <set name>, <field>)` finds the newest sampled file,
+     `read_set(path)` returns `(coord, values)`, and `emit(metrics, plots)`
+     prints the result block. Use them rather than re-deriving file layouts.
    - Run it with `validation.run_analysis(case_path)`. **The trust hinge:**
      the pass/fail number is produced by the tested `compare_profiles`, not
      by the script's own math — the script only extracts and plots.

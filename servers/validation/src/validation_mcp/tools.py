@@ -625,6 +625,12 @@ def run_analysis(
     read solver output files directly (e.g. a sampled ``postProcessing/sets``
     ``.xy`` file the solver wrote) — it cannot shell out to ``postProcess``.
 
+    Helpers for the generic parts, in ``validation_mcp.analysis``:
+    ``latest_set(".", name, field)`` finds the newest file a ``sets`` function
+    object called ``name`` wrote, ``read_set(path)`` returns ``(coord,
+    values)`` from a raw ``.xy`` set, and ``emit(metrics, plots)`` prints the
+    result block above as the script's last output.
+
     Execution is hardened but NOT a sandbox/jail: the child runs in its own
     process group (the whole group is killed on timeout, catching forked
     grandchildren), with best-effort RLIMIT caps on address space / CPU /
