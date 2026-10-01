@@ -92,12 +92,14 @@ cd agentic-openfoam
 | OpenFOAM v2412 | ESI apt package, plus an `of2412` alias |
 | Python | `uv` and the four MCP servers' environment |
 | ParaView + Xvfb | headless field renders for `export_field_image` |
-| Agents | Claude Code (`claude`) and the Kilo CLI (`kilo`) |
+| Agents | Claude Code (`claude`), GitHub Copilot CLI (`copilot`), Codex CLI (`codex`) and the Kilo CLI (`kilo`), each pre-wired to the MCP servers |
 | Local model | Ollama plus a model chosen for your GPU/RAM, exposed to the agents as `cfd-local` |
 
 It ends with `./scripts/doctor.sh`, which meshes and solves a tutorial,
 checks that Kilo sees all four MCP servers, and checks the local model.
-Options: `--model <ollama-tag>`, `--no-local`, `--no-claude`, `--no-kilo`.
+Options: `--agents copilot,kilo` (install only these; from `claude`,
+`kilo`, `codex`, `copilot`), `--no-codex` etc., `--model <ollama-tag>`,
+`--no-local`.
 Change the local model later with `./scripts/local-model.sh <tag>`.
 
 ### FSU cluster (RCC)
@@ -127,7 +129,9 @@ you. Details, GPU notes and the instructor's one-time image build are in
 Open a new terminal in the repo, then pick an agent:
 
 ```bash
-claude     # frontier: Claude Code
+copilot    # GitHub Copilot CLI: Copilot Pro is free for students via GitHub Education (/login)
+claude     # Claude Code
+codex      # OpenAI Codex CLI (ChatGPT sign-in)
 kilo       # Kilo: Tab cycles cfd | cfd-orchestrator (frontier + local) | cfd-local (local only)
 ```
 
@@ -163,8 +167,10 @@ written to `.kilo/kilo.jsonc` (gitignored) by `scripts/local-model.sh`.
 
 ### Other runtimes
 
-The same `.mcp.json` drives GitHub Copilot, Codex, Cursor, Claude Desktop
-and others (`AGENTS.md` points them at the workflow in `CLAUDE.md`). The
+Copilot CLI reads the same `.mcp.json` as Claude Code, Codex reads
+`.codex/config.toml`, and both follow `AGENTS.md` to the workflow in
+`CLAUDE.md`; `setup.sh` marks the repo trusted for both so the servers
+load. Cursor, Claude Desktop and others can use `.mcp.json` too. The
 bring-your-own-agent harness talks to the Anthropic API or any
 OpenAI-compatible server (Ollama, vLLM, LM Studio, llama.cpp):
 

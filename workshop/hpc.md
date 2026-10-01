@@ -1,8 +1,24 @@
 # Running the workshop on the cluster (FSU RCC)
 
 Everything in [`README.md`](README.md) also runs on an RCC compute node: the
-same `./setup.sh`, the same agents, the same two-step demo. On the cluster
-`setup.sh` switches to **HPC mode** on its own (Slurm present, no `apt`):
+same `./setup.sh`, the same agents, the same two-step demo.
+
+**Laptop or cluster?** Both work; pick one.
+
+| | Your laptop (WSL2 / Ubuntu) | FSU cluster (workshop account) |
+|---|---|---|
+| Setup time | 10–20 min, mostly downloads (~15 GB with the model; fast on FSU Wi-Fi) | about 1 min; the big files are already on the cluster |
+| Frontier loop (A) | yes | yes |
+| Local-model loops (B, C) | yes, at the speed of your GPU (≥ 14 GB VRAM ideal) | **CPU only**: workshop accounts get no GPU, and a local model on CPU is too slow for a full run. Watch the speaker's GPU demo instead |
+| After the workshop | yours to keep | workshop accounts are temporary |
+
+The workshop accounts (`workshop-001` … `workshop-040`) are CPU-only; RCC
+does not have enough free GPUs for a class to share. The speaker runs the
+local-model loops on one GPU, queued hours ahead (below), with recorded
+results as the fallback.
+
+On the cluster `setup.sh` switches to **HPC mode** on its own (Slurm
+present, no `apt`):
 
 | | Laptop / WSL2 | Cluster |
 |---|---|---|
@@ -27,15 +43,12 @@ up by **login** shells (`bash -l`). The agents need it (frontier models,
 `ollama pull`), so always start an interactive job with `bash -l`:
 
 ```bash
-# CPU node (frontier-only, or a local model on CPU):
-srun -A genacc_q -p genacc_q -c 8 --mem=32G -t 3:00:00 --pty bash -l
-
-# GPU node (local model on GPU):
-srun -A backfill2 -p backfill2 --gres=gpu:1 -c 8 --mem=48G -t 3:00:00 --pty bash -l
+srun -p <partition> -c 8 --mem=32G -t 3:00:00 --pty bash -l
 ```
 
-Use the partition and account your instructor gives you (a workshop
-reservation adds `--reservation=<name>`). If you work through VS Code
+Use the partition (and `-A <account>`) your instructor gives you; a
+workshop reservation adds `--reservation=<name>`. On a research account,
+`-A genacc_q -p genacc_q` is the general CPU queue. If you work through VS Code
 Remote-SSH on a node, its terminals are login shells already.
 
 Check the proxy is live: `echo $HTTPS_PROXY` should print
@@ -44,10 +57,18 @@ Check the proxy is live: `echo $HTTPS_PROXY` should print
 ## 2. Set up
 
 ```bash
-cd /gpfs/research/<group>/$USER        # or your home
+cd ~
 git clone https://github.com/kalagotla/agentic-openfoam-fsu.git agentic-openfoam
 cd agentic-openfoam
 ./setup.sh
+```
+
+No GitHub access from the cluster? The same repo is on the cluster as a
+tarball; unpack it instead of cloning:
+
+```bash
+cd ~ && tar -xzf /gpfs/research/engineering/dk26/agentic-openfoam-shared/agentic-openfoam.tar.gz
+cd agentic-openfoam && ./setup.sh
 ```
 
 The heavy pieces are already on the cluster, in the class's shared store
@@ -56,7 +77,7 @@ named in `workshop/hpc-site.env`, so setup downloads only the small ones:
 | From the shared store (symlinked, read-only) | Downloaded per person |
 |---|---|
 | OpenFOAM v2412 image (455 MB) | uv + Python packages, Node.js |
-| Ollama (2 GB) | Claude Code, Kilo CLI |
+| Ollama (2 GB) | Claude Code, Copilot, Codex, Kilo CLI |
 | model weights (`gpt-oss:20b` alone is 14 GB) | |
 
 Your own `~/.ollama/models` then holds only symlinks and the small
@@ -92,20 +113,51 @@ cd agentic-openfoam
 Then continue exactly as in [`README.md`](README.md) §2 (`claude`, `kilo`,
 `tail -f cases/work/<name>/REPORT.md`).
 
+## 4. The local model on a GPU, without waiting for one (speaker)
+
+GPU queues can take hours to start, so the GPU runs in its **own** job,
+queued early, while you work on a CPU node as usual. Kilo's `cfd-local`
+moves to the GPU when it starts:
+
+```bash
+scripts/hpc-gpu.sh submit        # queue it (defaults: gpu_q, 1 GPU, 4 h; add sbatch options, e.g. -t 8:00:00)
+scripts/hpc-gpu.sh status        # PENDING / RUNNING; prints when Ollama is up
+scripts/hpc-gpu.sh use           # point cfd-local at the GPU (restart kilo afterwards)
+scripts/hpc-gpu.sh cpu           # back to this node's CPU
+scripts/hpc-gpu.sh cancel        # release the GPU when done
+```
+
+Until the job starts, the CPU node handles everything that does not need
+a local model (Loop A with any frontier agent). `use` opens an SSH tunnel
+from the CPU node (`localhost:11435`) to Ollama in the GPU job, because
+RCC's web proxy intercepts plain HTTP between nodes. The GPU job reads the
+same model store in your home directory, so it downloads nothing. If the
+CPU job ends, the tunnel goes with it; run `use` again from the new node.
+The default job comes from `AOF_GPU_SBATCH` in `workshop/hpc-site.env`.
+
+Checked Oct 2026: `gpu_q` job on an RTX 4500 Ada (24 GB), Kilo `cfd-local`
+on an `ame_q` CPU node calling OpenFOAM tools through the tunnel, model
+100% on the GPU.
+
+If the GPU job has not started by the time you need it, show the recorded
+GPU runs in [`recorded/`](recorded/) instead.
+
 ## Cluster notes
 
 - **No `of2412` on the cluster.** Where a doc says `of2412`, prefix the
   command instead: `scripts/with-openfoam.sh blockMesh -help`, or open a
   shell with OpenFOAM loaded: `scripts/with-openfoam.sh bash`.
 
-- **Local models need a GPU node.** On CPU the ~18k-token agent prompt
-  alone takes many minutes to read (measured: 20+ min on an `ame_q` node),
-  so on a CPU node use the frontier loop (A) only. A 24 GB card (e.g. the
-  ada4500s in `backfill2`) holds `gpt-oss:20b`; request `--gres=gpu:1`.
+- **Local models need a GPU.** On CPU the ~18k-token agent prompt alone
+  takes many minutes to read (measured: 20+ min on an `ame_q` node), so on
+  a CPU node use the frontier loop (A), or `scripts/hpc-gpu.sh` (§4). A
+  20–24 GB card (the `gpu_q` A4500 / RTX 4500 Ada nodes) holds
+  `gpt-oss:20b`.
 - **Threads.** `scripts/local-model.sh` limits Ollama to your job's CPU
   count. Without that it spreads across the whole shared node.
-- **Signing in to Claude Code** on a node prints a URL; open it on your
-  laptop and paste the code back.
+- **Signing in** on a node: Claude Code prints a URL (open it on your
+  laptop, paste the code back); Copilot's `/login` and
+  `codex login --device-auth` show a code to enter at a URL on your laptop.
 - **Solver runs** happen inside your interactive job, on its cores.
 - **Where it was checked** (Sept 2026, `ame_q` node): `setup.sh` in HPC
   mode end to end, the shared image running OpenFOAM v2412 including

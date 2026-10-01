@@ -9,6 +9,11 @@
   // scripts/local-model.sh (re-run it to switch models).
   "$schema": "https://app.kilo.ai/config.json",
 
+  // Default frontier model: free, no login, US-developed (NVIDIA). Kilo's
+  // own default (kilo-auto) can route to non-US models. /models changes it.
+  "model": "kilo/nvidia/nemotron-3-ultra-550b-a55b:free",
+  "small_model": "kilo/nvidia/nemotron-3-super-120b-a12b:free",
+
   // `kilo` with no --agent starts here. Workflow instructions come from each
   // agent's prompt (.kilo/prompts/), not from a global instructions file, so
   // the local agents can carry a slim prompt that fits a 64k context.

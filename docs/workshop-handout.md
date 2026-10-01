@@ -18,15 +18,17 @@ https://github.com/kalagotla/agentic-openfoam-fsu
 ```
 
 Install with one command on WSL2, Ubuntu, or the FSU cluster:
-`./setup.sh` (OpenFOAM, the MCP servers, Claude Code, Kilo, Ollama and a
-local model). The hands-on steps are in
+`./setup.sh` (OpenFOAM, the MCP servers, Claude Code, GitHub Copilot CLI,
+Codex CLI, Kilo, Ollama and a local model; `--agents copilot,kilo` installs
+just those agents). The hands-on steps are in
 [`workshop/README.md`](../workshop/README.md); the cluster notes in
 [`workshop/hpc.md`](../workshop/hpc.md).
 
-You do **not** need Claude Code. Kilo drives the same servers with free,
+You do **not** need Claude Code. **GitHub Copilot CLI is free for
+students** (Copilot Pro through GitHub Education) and comes pre-wired;
+Codex uses a ChatGPT sign-in; Kilo drives the same servers with free,
 paid, or local models; `scripts/run_agent.py` drives them from the
-Anthropic API or any OpenAI-compatible server; Copilot, Codex, Cursor and
-Continue.dev read the same `.mcp.json`. See
+Anthropic API or any OpenAI-compatible server. See
 [`runtime-options.md`](runtime-options.md).
 
 ## Tool surface
