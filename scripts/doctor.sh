@@ -86,7 +86,7 @@ if have copilot; then
     if [[ $n -ge 4 ]]; then
         pass "GitHub Copilot CLI: sees all 4 MCP servers (.mcp.json)"
     else
-        fail "Copilot sees $n/4 MCP servers — is the repo in trustedFolders in ~/.copilot/config.json? (re-run ./setup.sh)"
+        fail "Copilot sees $n/4 MCP servers — is the repo in trustedFolders in ~/.copilot/settings.json? (re-run ./setup.sh)"
     fi
 else
     note "GitHub Copilot CLI not installed"

@@ -330,17 +330,23 @@ if $WANT_COPILOT; then
         quiet npm install -g @github/copilot || die "GitHub Copilot CLI install failed."
         ok "GitHub Copilot CLI installed (run 'copilot', then /login)"
     fi
-    # Copilot loads the repo's .mcp.json only from trusted folders.
-    python3 - "$REPO_DIR" "${COPILOT_HOME:-$HOME/.copilot}/config.json" <<'PY' && say "Marked this repo trusted for Copilot (~/.copilot/config.json)"
-import json, os, sys
+    # Copilot loads the repo's .mcp.json only from trusted folders. User
+    # settings live in ~/.copilot/settings.json (config.json is Copilot's
+    # own state file and may carry // comments).
+    python3 - "$REPO_DIR" "${COPILOT_HOME:-$HOME/.copilot}/settings.json" <<'PY' \
+        || warn "Could not update ~/.copilot/settings.json; add this repo to its \"trustedFolders\" by hand (or answer Copilot's trust prompt)."
+import json, os, re, sys
 repo, path = sys.argv[1:]
-cfg = json.load(open(path)) if os.path.exists(path) and os.path.getsize(path) else {}
+cfg = {}
+if os.path.exists(path) and os.path.getsize(path):
+    text = re.sub(r"^\s*//.*$", "", open(path).read(), flags=re.M)
+    cfg = json.loads(text) if text.strip() else {}
 folders = cfg.setdefault("trustedFolders", [])
-if repo in folders:
-    sys.exit(1)
-folders.append(repo)
-os.makedirs(os.path.dirname(path), exist_ok=True)
-json.dump(cfg, open(path, "w"), indent=2)
+if repo not in folders:
+    folders.append(repo)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    json.dump(cfg, open(path, "w"), indent=2)
+    print("  Marked this repo trusted for Copilot (~/.copilot/settings.json)")
 PY
 fi
 
