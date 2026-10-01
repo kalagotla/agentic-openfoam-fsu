@@ -71,11 +71,32 @@ if have kilo; then
 else
     note "Kilo CLI not installed"
 fi
+if have codex; then
+    n=$(codex mcp list 2>/dev/null | grep -cE '^(openfoam|validation|consultant|research_assistant) ')
+    if [[ $n -ge 4 ]]; then
+        pass "Codex CLI: sees all 4 MCP servers (.codex/config.toml)"
+    else
+        fail "Codex sees $n/4 MCP servers — is the repo trusted in ~/.codex/config.toml? (re-run ./setup.sh)"
+    fi
+else
+    note "Codex CLI not installed"
+fi
+if have copilot; then
+    n=$(timeout 60 copilot mcp list 2>/dev/null | grep -cE '^ +(openfoam|validation|consultant|research_assistant) ')
+    if [[ $n -ge 4 ]]; then
+        pass "GitHub Copilot CLI: sees all 4 MCP servers (.mcp.json)"
+    else
+        fail "Copilot sees $n/4 MCP servers — is the repo in trustedFolders in ~/.copilot/config.json? (re-run ./setup.sh)"
+    fi
+else
+    note "GitHub Copilot CLI not installed"
+fi
 
 # Local model.
 if have ollama; then
-    if curl -fsS "${OLLAMA_HOST:-http://localhost:11434}/api/version" >/dev/null 2>&1; then
-        if ollama show cfd-local >/dev/null 2>&1; then
+    url=$(OLLAMA_HOST= "$REPO_DIR/scripts/local-model.sh" --url)
+    if curl -fsS "$url/api/version" >/dev/null 2>&1; then
+        if OLLAMA_HOST=$url ollama show cfd-local >/dev/null 2>&1; then
             pass "Ollama running; $("$REPO_DIR/scripts/local-model.sh" --show | head -1)"
         else
             fail "Ollama is running but the cfd-local model is missing — run ./scripts/local-model.sh"

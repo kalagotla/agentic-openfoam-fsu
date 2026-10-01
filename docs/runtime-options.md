@@ -110,15 +110,33 @@ MCP support in Claude Desktop evolves quickly; current canonical setup at <https
 
 Install from the VS Code Marketplace. Both register MCP servers from a config file (`.continue/config.yaml` for Continue.dev; see <https://docs.cline.bot/mcp-servers> for Cline). Point them at this repo's `.mcp.json`. Both expose the same tool surface as Claude Code — only the IDE chrome differs.
 
-## 5. GitHub Copilot CLI / Gemini CLI / Codex
+## 5. GitHub Copilot CLI / Codex / Gemini CLI
 
-These CLIs speak MCP too, but each keeps its own server registry rather than reading this repo's `.mcp.json` — copy the four `command` / `args` entries from [`.mcp.json`](../.mcp.json) into the client's config:
+`./setup.sh` installs Copilot and Codex (`--agents` picks which) and wires
+both to the four servers. Run them from the repo root.
 
-- **GitHub Copilot CLI** (`copilot`) — `/mcp add` inside the session, or edit its MCP config file. Steps: <https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers>. Free tier with a GitHub login, so it's the no-API-key option for attendees.
-- **Gemini CLI** (`gemini`) — `gemini mcp add <name> <command> [args…]`, or the `mcpServers` block in `~/.gemini/settings.json`. Steps: <https://github.com/google-gemini/gemini-cli>.
-- **OpenAI Codex CLI** (`codex`) — an `[mcp_servers.<name>]` table in `~/.codex/config.toml`. Steps: <https://github.com/openai/codex>.
+- **GitHub Copilot CLI** (`copilot`) reads this repo's `.mcp.json` as
+  workspace servers, and `AGENTS.md` / `CLAUDE.md` as instructions, but
+  only in a trusted folder. `setup.sh` adds the repo to `trustedFolders`
+  in `~/.copilot/config.json`; check with `copilot mcp list`. Sign in with
+  `/login` (GitHub device code). Students and teachers get Copilot Pro free
+  through GitHub Education, so this is the no-cost frontier option for
+  attendees.
+  Copilot can also run on a local model
+  (`COPILOT_PROVIDER_BASE_URL=http://localhost:11434/v1 COPILOT_MODEL=cfd-local copilot`);
+  we have not rehearsed that path.
+- **OpenAI Codex CLI** (`codex`) reads the project config
+  [`.codex/config.toml`](../.codex/config.toml) for trusted projects;
+  `setup.sh` marks the repo trusted in `~/.codex/config.toml`. Check with
+  `codex mcp list`. Sign in with a ChatGPT account or an OpenAI API key
+  (`codex login --device-auth` on a headless node).
+- **Gemini CLI** (`gemini`) — not installed by `setup.sh`;
+  `gemini mcp add <name> <command> [args…]`, or the `mcpServers` block in
+  `~/.gemini/settings.json`. Steps: <https://github.com/google-gemini/gemini-cli>.
 
-All three then expose the same four servers and are driven with the same prompts as the harness.
+All three expose the same four servers and take the same prompts. Only
+Claude Code enforces `automation_level` pauses with a hook; for the others
+the levels are advisory.
 
 ## Pick a path
 

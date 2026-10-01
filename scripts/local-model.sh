@@ -19,6 +19,11 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ALIAS=cfd-local
 OLLAMA_URL=${OLLAMA_HOST:-http://localhost:11434}
 [[ $OLLAMA_URL == http* ]] || OLLAMA_URL="http://$OLLAMA_URL"
+# A server on another machine (scripts/hpc-gpu.sh points us at the Ollama in
+# a GPU job, through a tunnel on localhost:11435). Then we neither start a
+# server nor look at this machine's GPU.
+REMOTE=${AOF_REMOTE:+true}; REMOTE=${REMOTE:-false}
+[[ $OLLAMA_URL =~ ^https?://(localhost|127\.0\.0\.1)(:|/|$) ]] || REMOTE=true
 
 say()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33mWARNING:\033[0m %s\n' "$*" >&2; }
@@ -74,6 +79,7 @@ ollama_up() { curl -fsS "$OLLAMA_URL/api/version" >/dev/null 2>&1; }
 ensure_ollama() {
     command -v ollama >/dev/null || die "ollama is not installed — run ./setup.sh first."
     ollama_up && return
+    $REMOTE && die "The Ollama server at $OLLAMA_URL is not reachable."
     say "Starting the Ollama server…"
     if command -v systemctl >/dev/null && systemctl is-enabled ollama >/dev/null 2>&1; then
         sudo systemctl start ollama || true
@@ -163,20 +169,34 @@ PY
 show() {
     if [[ -f $REPO_DIR/.local-model ]]; then
         echo "$ALIAS -> $(cat "$REPO_DIR/.local-model")"
+        OLLAMA_URL=$(configured_url)
     else
         echo "$ALIAS is not configured yet — run ./scripts/local-model.sh"
     fi
-    ollama_up || echo "(Ollama is not running — any agent call will start failing until it is)"
+    ollama_up || echo "(Ollama at $OLLAMA_URL is not running — any agent call will start failing until it is)"
     return 0
+}
+# The server Kilo was last pointed at (recorded in .local-model).
+configured_url() {
+    local url
+    url=$(grep -o 'url=[^ ]*' "$REPO_DIR/.local-model" 2>/dev/null | cut -d= -f2-)
+    echo "${url:-http://localhost:11434}"
 }
 
 # --- main -------------------------------------------------------------------
 case "${1:-}" in
     -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
     --show)    show; exit 0 ;;
+    --url)     configured_url; exit 0 ;;
 esac
 
-VRAM=$(gpu_vram_gb); RAM=$(ram_gb)
+if $REMOTE; then
+    # The GPU is on the other machine; hpc-gpu.sh passes its size.
+    VRAM=${AOF_REMOTE_VRAM:-16}; RAM=0
+    say "Using the Ollama server at $OLLAMA_URL"
+else
+    VRAM=$(gpu_vram_gb); RAM=$(ram_gb)
+fi
 MODEL=${1:-$(choose_model "$VRAM" "$RAM")}
 CTX=${CFD_LOCAL_CTX:-$(choose_ctx "$VRAM" "$RAM")}
 
@@ -206,7 +226,7 @@ else
 fi
 
 say "Creating alias $ALIAS -> $MODEL (num_ctx $CTX)…"
-THREADS=$(job_cpus)
+THREADS=$($REMOTE || job_cpus)
 [[ -n $THREADS ]] && say "Limiting the model to the job's $THREADS CPU threads."
 if [[ -L $(blob_path "$MODEL") ]]; then
     # Weights are symlinks into the read-only shared store, where `ollama
@@ -227,6 +247,7 @@ cat >"$REPO_DIR/.kilo/kilo.jsonc" <<EOF
 {
   "provider": {
     "ollama": {
+      "options": { "baseURL": "$OLLAMA_URL/v1" },
       "models": {
         "$ALIAS": {
           "name": "cfd-local ($MODEL)",
@@ -237,7 +258,7 @@ cat >"$REPO_DIR/.kilo/kilo.jsonc" <<EOF
   }
 }
 EOF
-echo "$MODEL ctx=$CTX" >"$REPO_DIR/.local-model"
+echo "$MODEL ctx=$CTX url=$OLLAMA_URL" >"$REPO_DIR/.local-model"
 
 say "Loading the model into memory…"
 # An empty prompt only loads the weights; no generation, so it is quick even

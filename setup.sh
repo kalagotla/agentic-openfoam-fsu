@@ -16,7 +16,8 @@
 #   ParaView         apt + headless pvbatch wrapper   (skipped: renders off)
 #   Python           uv + the MCP servers' env        same
 #   Node.js 22       NodeSource apt                   user-space tarball
-#   Agents           Claude Code + Kilo CLI           same
+#   Agents           Claude Code, Kilo CLI, Codex     same
+#                    CLI, GitHub Copilot CLI
 #   Local model      Ollama + a model for this        user-space Ollama, same
 #                    machine as `cfd-local`           model logic
 #   Health check     scripts/doctor.sh                same
@@ -24,8 +25,11 @@
 # Options:
 #   --model TAG     use this Ollama model instead of the automatic pick
 #   --no-local      skip Ollama and the local model (frontier-only setup)
-#   --no-claude     skip Claude Code
-#   --no-kilo       skip Kilo
+#   --agents LIST   which coding agents to install, comma-separated, from
+#                   claude, kilo, codex, copilot (default: all four), e.g.
+#                   --agents copilot,kilo
+#   --no-claude, --no-kilo, --no-codex, --no-copilot
+#                   drop one agent from the list
 #   --hpc           force HPC mode (no sudo, Apptainer for OpenFOAM)
 #   -h, --help      show this help
 #
@@ -48,21 +52,34 @@ NODE_MAJOR=22
 
 MODEL=""
 WANT_LOCAL=true
-WANT_CLAUDE=true
-WANT_KILO=true
+AGENTS=claude,kilo,codex,copilot
+DROP=""
 HPC=auto
 while (($#)); do
     case "$1" in
         --model)     MODEL=${2:?--model needs a tag, e.g. gemma4:12b}; shift ;;
         --no-local)  WANT_LOCAL=false ;;
-        --no-claude) WANT_CLAUDE=false ;;
-        --no-kilo)   WANT_KILO=false ;;
+        --agents)    AGENTS=${2:?--agents needs a list, e.g. claude,copilot}; shift ;;
+        --no-claude|--no-kilo|--no-codex|--no-copilot) DROP+=",${1#--no-}" ;;
         --hpc)       HPC=true ;;
-        -h|--help)   sed -n '2,38p' "$0"; exit 0 ;;
+        -h|--help)   sed -n '2,42p' "$0"; exit 0 ;;
         *) echo "Unknown option: $1 (see --help)" >&2; exit 2 ;;
     esac
     shift
 done
+
+[[ $AGENTS == all ]] && AGENTS=claude,kilo,codex,copilot
+[[ $AGENTS == none ]] && AGENTS=""
+for a in ${AGENTS//,/ }; do
+    case $a in claude|kilo|codex|copilot) ;;
+        *) echo "Unknown agent '$a' in --agents (choose from claude, kilo, codex, copilot)" >&2; exit 2 ;;
+    esac
+done
+want() { [[ ,$AGENTS, == *,$1,* && ,$DROP, != *,$1,* ]]; }
+WANT_CLAUDE=false; want claude && WANT_CLAUDE=true
+WANT_KILO=false; want kilo && WANT_KILO=true
+WANT_CODEX=false; want codex && WANT_CODEX=true
+WANT_COPILOT=false; want copilot && WANT_COPILOT=true
 
 LOG="$REPO_DIR/setup.log"
 : >"$LOG"
@@ -250,7 +267,7 @@ install_node_userspace() {
     "$HOME/.local/bin/npm" config set prefix "$HOME/.local"
     hash -r
 }
-if ($WANT_CLAUDE || $WANT_KILO) && ! node_ok; then
+if ($WANT_CLAUDE || $WANT_KILO || $WANT_CODEX || $WANT_COPILOT) && ! node_ok; then
     say "Installing Node.js ${NODE_MAJOR}…"
     if $HPC; then
         install_node_userspace
@@ -286,6 +303,43 @@ if $WANT_KILO; then
         quiet npm install -g @kilocode/cli || die "Kilo CLI install failed."
         ok "Kilo CLI installed"
     fi
+fi
+if $WANT_CODEX; then
+    if have codex; then
+        ok "Codex CLI $(codex --version 2>/dev/null | awk '{print $NF}')"
+    else
+        say "Installing the Codex CLI…"
+        quiet npm install -g @openai/codex || die "Codex CLI install failed."
+        ok "Codex CLI installed (run 'codex' once to sign in)"
+    fi
+    # Codex reads the repo's .codex/config.toml (the MCP servers) only for
+    # trusted projects.
+    mkdir -p "$HOME/.codex"
+    if ! grep -qF "[projects.\"$REPO_DIR\"]" "$HOME/.codex/config.toml" 2>/dev/null; then
+        printf '\n[projects."%s"]\ntrust_level = "trusted"\n' "$REPO_DIR" >>"$HOME/.codex/config.toml"
+        say "Marked this repo trusted for Codex (~/.codex/config.toml)"
+    fi
+fi
+if $WANT_COPILOT; then
+    if have copilot; then
+        ok "GitHub Copilot CLI $(copilot --version 2>/dev/null | head -1 | awk '{print $NF}' | sed 's/\.$//')"
+    else
+        say "Installing the GitHub Copilot CLI…"
+        quiet npm install -g @github/copilot || die "GitHub Copilot CLI install failed."
+        ok "GitHub Copilot CLI installed (run 'copilot', then /login)"
+    fi
+    # Copilot loads the repo's .mcp.json only from trusted folders.
+    python3 - "$REPO_DIR" "${COPILOT_HOME:-$HOME/.copilot}/config.json" <<'PY' && say "Marked this repo trusted for Copilot (~/.copilot/config.json)"
+import json, os, sys
+repo, path = sys.argv[1:]
+cfg = json.load(open(path)) if os.path.exists(path) and os.path.getsize(path) else {}
+folders = cfg.setdefault("trustedFolders", [])
+if repo in folders:
+    sys.exit(1)
+folders.append(repo)
+os.makedirs(os.path.dirname(path), exist_ok=True)
+json.dump(cfg, open(path, "w"), indent=2)
+PY
 fi
 
 # --- 5. Local model ----------------------------------------------------------
@@ -332,11 +386,9 @@ $(printf '\033[1;32mSetup complete.\033[0m') Open a NEW terminal (or run: source
 
   cd $REPO_DIR
 
-  Frontier (Claude Code):   claude
+  Start any agent you installed in the repo and give it a scenario:
       > Set up and run cases/scenarios/lid-cavity.yaml
-
-  Kilo (any model):         kilo
-      Tab cycles agents: cfd  |  cfd-orchestrator (frontier + local)  |  cfd-local (local only)
+$($WANT_CLAUDE && printf '\n  Claude Code:              claude')$($WANT_COPILOT && printf '\n  GitHub Copilot (free for students): copilot     (then /login)')$($WANT_CODEX && printf '\n  Codex (ChatGPT account):  codex')$($WANT_KILO && printf '\n  Kilo (any model, local):  kilo\n      Tab cycles agents: cfd  |  cfd-orchestrator (frontier + local)  |  cfd-local (local only)')
 
   Watch the audit trail:    tail -f cases/work/lid-cavity/REPORT.md
 

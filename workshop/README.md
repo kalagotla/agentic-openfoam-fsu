@@ -29,19 +29,39 @@ cd agentic-openfoam
 ```
 
 **On the FSU cluster** instead of a laptop: same clone and `./setup.sh`,
-from an interactive compute node — see [`hpc.md`](hpc.md).
+from an interactive compute node — see [`hpc.md`](hpc.md). Setup there
+takes about a minute (the large files are pre-staged), but the workshop
+accounts are CPU-only, so on the cluster you run the frontier loop (A) and
+watch the speaker's GPU demo for the local-model loops. On a laptop setup
+downloads ~15 GB (fast on FSU Wi-Fi), and every loop runs, at the speed of
+your own GPU.
 
-`setup.sh` installs OpenFOAM v2412, the Python environment, Claude Code,
-the Kilo CLI, Ollama, and a local model sized to your machine, then runs a
-health check. It takes 10–20 minutes, most of it downloads. Re-running it
+`setup.sh` installs OpenFOAM v2412, the Python environment, four coding
+agents (Claude Code, GitHub Copilot CLI, Codex CLI and the Kilo CLI), Ollama,
+and a local model sized to your machine, then runs a health check. To
+install only some agents, list them: `./setup.sh --agents copilot,kilo`
+(choose from `claude`, `kilo`, `codex`, `copilot`; `--no-codex` etc. drop
+one). Every agent comes pre-wired to the four MCP servers. It takes 10–20 minutes, most of it downloads. Re-running it
 is safe; finished steps are skipped. If something fails, the last lines of
 `setup.log` say why, and `./scripts/doctor.sh` re-runs just the checks.
 
 Open a **new** terminal afterwards so the PATH changes apply.
 
-### Sign in to the agents
+### Pick an agent and sign in
 
-| Agent | How to sign in |
+You need **one** of these. All four drive the same MCP servers with the
+same prompts; the difference is whose models you use and who pays.
+
+| Agent | Command | Cost | How to sign in |
+|---|---|---|---|
+| **GitHub Copilot CLI** | `copilot` | **free for students**: Copilot Pro through [GitHub Education](https://education.github.com/pack) (verify your student status once; approval can take a few days, so do it before the workshop) | run `copilot`, type `/login`, and follow the device code with your GitHub account. Pick a model with `/model` |
+| Claude Code | `claude` | Claude Pro/Max or API key | see below |
+| Codex CLI | `codex` | ChatGPT plan or OpenAI API key | run `codex` and choose "Sign in with ChatGPT"; on the cluster, `codex login --device-auth` |
+| Kilo CLI | `kilo` | free models built in; local models free | see below |
+
+No account at all? Kilo's free models and the local model need none.
+
+| Agent | Details |
 |---|---|
 | Claude Code | run `claude` once in the repo; sign in with a Claude Pro/Max account or an API key, and **accept the "trust this folder" prompt** (until you do, the repo's MCP servers and pre-approved tools stay off) |
 | Kilo (frontier models) | nothing needed for the free models (`kilo/kilo-auto/free` and the `:free` list in `/models`); `kilo auth login` for a Kilo account, or `export ANTHROPIC_API_KEY=...` to use your own key |
@@ -138,8 +158,13 @@ then, in Claude Code, `/clear` and:
 > Set up and run cases/scenarios/lid-cavity-re1000.yaml
 ```
 
-The same loop works in Kilo: run `kilo`, keep the default `cfd` agent,
-pick a frontier model with `/models`, and type the same prompts.
+The same loop works in any of the agents. In **Copilot** (`copilot`) or
+**Codex** (`codex`), type the same two prompts, starting a fresh session
+(`/clear`, or restart the CLI) between the steps. In Kilo, run `kilo`,
+keep the default `cfd` agent, pick a frontier model with `/models`, and
+type the same prompts. Only Claude Code enforces the scenario's review
+pauses with a hook; the other agents are asked to honor them in
+`CLAUDE.md` and usually do.
 
 ### Loop B — frontier + local (Kilo orchestrator)
 
