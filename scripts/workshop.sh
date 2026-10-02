@@ -65,7 +65,7 @@ promote() {
 }
 
 reset_work() {
-    rm -rf cases/work/lid-cavity cases/work/lid-cavity-re1000
+    rm -rf cases/work/lid-cavity cases/work/lid-cavity-re1000 cases/work/lid-cavity*--*
     # archive_case output from Step 1 (end_of_run.archive_case: true).
     rm -rf cases/examples/lid-cavity
     echo "Cleared cases/work/lid-cavity*, cases/examples/lid-cavity."
@@ -102,7 +102,7 @@ case "${1:-status}" in
     demote)    demote ;;
     fork)      shift; fork "$@" ;;
     reset)     reset_work ;;
-    reset-all) reset_work; rm -f "$ENTRY" "$DRAFT"; echo "Removed $ENTRY — the corpus is empty again (Step 1)." ;;
+    reset-all) reset_work; rm -f "$ENTRY" "$DRAFT" cases/scenarios/*--*.yaml; echo "Removed $ENTRY — the corpus is empty again (Step 1)." ;;
     -h|--help) sed -n '2,9p' "$0" ;;
     *) echo "unknown command: $1 (see --help)" >&2; exit 2 ;;
 esac

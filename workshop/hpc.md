@@ -8,14 +8,15 @@ same `./setup.sh`, the same agents, the same two-step demo.
 | | Your laptop (WSL2 / Ubuntu) | FSU cluster (workshop account) |
 |---|---|---|
 | Setup time | 10–20 min, mostly downloads (~15 GB with the model; fast on FSU Wi-Fi) | about 1 min; the big files are already on the cluster |
-| Frontier loop (A) | yes | yes |
-| Local-model loops (B, C) | yes, at the speed of your GPU (≥ 14 GB VRAM ideal) | **CPU only**: workshop accounts get no GPU, and a local model on CPU is too slow for a full run. Watch the speaker's GPU demo instead |
+| Frontier-model rungs (1, 3) | yes | yes |
+| Local-model rungs (2, 4, 5) | yes, at the speed of your GPU (≥ 20 GB VRAM ideal) | **CPU only**: workshop accounts get no GPU, and a local model on CPU is too slow for a full run. Watch the live GPU demo instead |
 | After the workshop | yours to keep | workshop accounts are temporary |
 
 The workshop accounts (`workshop-001` … `workshop-040`) are CPU-only; RCC
-does not have enough free GPUs for a class to share. The speaker runs the
-local-model loops on one GPU, queued hours ahead (below), with recorded
-results as the fallback.
+does not have enough free GPUs for a class to share. The local-model demos
+run live on one GPU, and their results are in [`recorded/`](recorded/).
+If your own account can use `gpu_q`, §4 shows how to put the local model
+on a GPU.
 
 On the cluster `setup.sh` switches to **HPC mode** on its own (Slurm
 present, no `apt`):
@@ -115,9 +116,10 @@ cd agentic-openfoam
 Then continue exactly as in [`README.md`](README.md) §2 (`claude`, `kilo`,
 `tail -f cases/work/<name>/REPORT.md`).
 
-## 4. The local model on a GPU, without waiting for one (speaker)
+## 4. The local model on a GPU, without waiting for one
 
-GPU queues can take hours to start, so the GPU runs in its **own** job,
+Needs an account with access to a GPU partition (not the workshop
+accounts). GPU queues can take hours to start, so the GPU runs in its **own** job,
 queued early, while you work on a CPU node as usual. Kilo's `cfd-local`
 moves to the GPU when it starts:
 
@@ -155,7 +157,7 @@ GPU runs in [`recorded/`](recorded/) instead.
 
 - **Local models need a GPU.** On CPU the ~18k-token agent prompt alone
   takes many minutes to read (measured: 20+ min on an `ame_q` node), so on
-  a CPU node use the frontier loop (A), or `scripts/hpc-gpu.sh` (§4). A
+  a CPU node use a frontier agent, or `scripts/hpc-gpu.sh` (§4). A
   20–24 GB card (the `gpu_q` A4500 / RTX 4500 Ada nodes) holds
   `gpt-oss:20b`.
 - **Threads.** `scripts/local-model.sh` limits Ollama to your job's CPU
@@ -168,24 +170,9 @@ GPU runs in [`recorded/`](recorded/) instead.
   mode end to end, the shared image running OpenFOAM v2412 including
   `mpirun`, and Kilo connecting all four MCP servers through the image.
 
-## For instructors: the shared store
+## Setting this up on another cluster
 
-The OpenFOAM image, Ollama and the model weights ship to the class as one
-read-only directory. Stage it once, on a compute node:
-
-```bash
-srun -A ame_q -p ame_q -c 16 --mem=64G -t 2:00:00 --pty bash -l
-scripts/stage-hpc-shared.sh /gpfs/research/<group>/agentic-openfoam-shared
-```
-
-It builds `openfoam-v2412.sif` (455 MB, ~10 min, via
-`scripts/build-openfoam-sif.sh`), unpacks Ollama, fetches the five models
-above (~70 GB, ~15 min through the proxy), checks every blob's sha256, and
-makes it all world-readable. Re-running adds only what is missing; pass
-model names to add others
-(`scripts/stage-hpc-shared.sh <dir> gemma4:26b`). Point
-`workshop/hpc-site.env` at the directory. Attendees' `setup.sh` then
-links to it instead of downloading.
-
-The image can also be attached to a GitHub release (set
-`AOF_OPENFOAM_SIF_URL`) for clusters that cannot see your storage.
+The OpenFOAM image, Ollama and the model weights reach attendees as one
+read-only shared directory named in `workshop/hpc-site.env`.
+`scripts/stage-hpc-shared.sh <dir>` builds it once on a compute node (see
+the comments at the top of that script).

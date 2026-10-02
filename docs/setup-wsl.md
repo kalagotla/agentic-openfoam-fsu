@@ -71,7 +71,7 @@ uv --version  # 0.4+ is fine
 
 ```bash
 # In your preferred working directory
-git clone https://github.com/kalagotla/agentic-openfoam.git
+git clone https://github.com/kalagotla/agentic-openfoam-fsu.git agentic-openfoam
 cd agentic-openfoam
 
 # Install both MCP servers and dev tools

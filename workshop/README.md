@@ -33,8 +33,8 @@ cd agentic-openfoam
 **On the FSU cluster** instead of a laptop: same clone and `./setup.sh`,
 from an interactive compute node — see [`hpc.md`](hpc.md). Setup there
 takes about a minute (the large files are pre-staged), but the workshop
-accounts are CPU-only, so on the cluster you run the frontier loop (A) and
-watch the speaker's GPU demo for the local-model loops. On a laptop setup
+accounts are CPU-only, so on the cluster you run the frontier rungs and
+watch the live GPU demo for the local-model rungs. On a laptop setup
 downloads ~15 GB (fast on FSU Wi-Fi), and every loop runs, at the speed of
 your own GPU.
 
@@ -174,7 +174,7 @@ What it shows:
   run by Nemotron, its thin entry ("20×20 is enough") sent Step 2 to a FAIL.
   That is why a person reviews before promoting.
 
-Recorded runs of every rung are in [`recorded/`](recorded/) as a fallback.
+Recorded runs of every rung are in [`recorded/`](recorded/).
 
 ### Running the rungs
 
@@ -192,27 +192,14 @@ Recorded runs of every rung are in [`recorded/`](recorded/) as a fallback.
 - **Rung 5b** can also use the lean `cfd-local-plan` agent, which only
   executes plans.
 
-### The session (FSU DC-QC, Oct 2, 2:00–4:00 PM)
+### Running several agents side by side
 
-Three demos on one benchmark, sharing one corpus: a **frontier** model
-(Claude Code), a **mid-sized open** model (Nemotron 3 Ultra, free, in Kilo)
-and a **local** model (Muse Glimmer 30B). The presenter's minute-by-minute
-run sheet, with every command, is [`DEMO.md`](DEMO.md).
-
-| Time | What |
-|---|---|
-| 2:00 | Clone and `./setup.sh` (laptop or cluster); setup runs during the slides |
-| 2:05 | Slides. A Nemotron run *without* knowledge starts in the background |
-| 2:40 | Frontier: Claude, Step 1 (grid study, GCI, REPORT.md, corpus draft) → promote |
-| 2:55 | Frontier: Claude, Step 2 at Re = 1000 with the entry |
-| 3:05 | Mid-size: the no-knowledge result; Nemotron with the entry, and Nemotron directing the local model (token savings) start in the background |
-| 3:10 | Local: Muse with the entry, open-ended, then the targeted prompt |
-| 3:25 | Mid-size results: with vs without knowledge, frontier tokens alone vs directing the local model |
-| 3:35 | The ladder, wrap-up, Q&A |
-
-Run several agents side by side with `./scripts/workshop.sh fork
-<scenario> <tag> --auto` (its own case folder, no pauses). Show token use
-with `python3 scripts/session-tokens.py <session> [<session>]`.
+`./scripts/workshop.sh fork <scenario> <tag> --auto` copies a scenario with
+its own case folder and no review pauses, so two agents can run the same
+step at once. Compare their token use with
+`python3 scripts/session-tokens.py <session> [<session>]` (session ids:
+`kilo session list`): an orchestrated run shows how much of the work moved
+from the frontier model to the local one.
 
 ## 3. When things go wrong
 
@@ -222,7 +209,7 @@ with `python3 scripts/session-tokens.py <session> [<session>]`.
 | `blockMesh: command not found` in your own shell | `of2412` (the agents source OpenFOAM themselves) |
 | Kilo: agent says a tool is missing | `kilo mcp list` — all four servers should be `connected`; run `kilo` from the repo root |
 | Kilo local agent: "connection refused" | Ollama is not running: `./scripts/local-model.sh --show`, then `./scripts/local-model.sh` to restart it |
-| Local model stops or writes a tool call as text | reply `continue`; if it keeps failing, try `./scripts/local-model.sh muse-glimmer:30b` (GPU ≥ 24 GB) or use Loop B |
+| Local model stops or writes a tool call as text | reply `continue`; if it keeps failing, try `./scripts/local-model.sh muse-glimmer:30b` (GPU ≥ 20 GB) or the targeted prompt (rung 5b) |
 | Step 2 did not cite the corpus | `./scripts/workshop.sh status` — the entry must be promoted (no `.draft.md`) |
 | `prepare_case` refuses: directory exists | `./scripts/workshop.sh reset` |
 | `mpirun` hangs on WSL (doctor warning, or your own parallel runs) | Open MPI's hwloc probes X display `:1` over `localhost:6001`, which never answers under WSL's mirrored networking. The agents' tools already set the fix; for your own shell: `export HWLOC_COMPONENTS=-gl` (setup adds it to `~/.bashrc`) |
