@@ -11,6 +11,8 @@ Ultra through Kilo. Each scenario was copied with `automation_level: 5`.
 
 | Rung | Setup | Result | Report |
 |---|---|---|---|
+| 0 | Step 1, Claude Code with the GCI requirement ([entry with "Validated setup"](ladder/step1-claude-gci/corpus-entry.md)) | **PASS** on 40×40 after a convergence and a validation miss; GCI on 20/40/80 (p ≈ 2, GCI ≈ 2 %); 5.8 min, $2.46 | [step1-claude-gci](ladder/step1-claude-gci/REPORT.md) |
+| — | Nemotron alone, **no** corpus entry | borderline **PASS** (u 4.4 %, v 4.3 %) after jumping to 128×128; 8 solver runs, 16 min | [nemotron-no-knowledge](ladder/nemotron-no-knowledge/REPORT.md) |
 | 1 | Claude Code alone | **PASS** (u 0.47%, v 0.18%), applied all three lessons of the entry, cited it 8×, 0 retries; 2.5 min, $1.23 | [rung1-claude-alone](ladder/rung1-claude-alone/REPORT.md) |
 | 2 | Claude writes a plan ([as written](ladder/rung2-claude-plans-local/plan-written-by-claude.md)) · local Muse executes it | **PASS**, 0 failed local tool calls; 5.7 min, $1.15 | [rung2-claude-plans-local](ladder/rung2-claude-plans-local/REPORT.md) |
 | 3 | Nemotron 3 Ultra alone (Kilo `cfd`) | **PASS** (u 0.59%, v 0.09%) on 80×80, but 23 min: 13 solver runs, 24 dictionaries written from memory, narration only at the end; 1 nudge | [rung3-nemotron-alone](ladder/rung3-nemotron-alone/REPORT.md) |

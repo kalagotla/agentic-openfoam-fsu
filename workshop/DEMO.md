@@ -43,12 +43,12 @@ Optional, if time allows: **Claude planning for the local model** (rung 2):
 
 | Run | Typical result |
 |---|---|
-| Claude, Step 1 | tutorial 20×20 misses Ghia's v profile → refine 40×40, 80×80 → PASS, GCI reported, entry drafted; ~5–6 min, ~$2.50 |
+| Claude, Step 1 | tutorial 20×20 misses Ghia's v profile (5.9 % > 5 %) → refine 40×40, 80×80 → PASS, GCI (apparent order ≈ 2, fine-grid GCI ≈ 2 %), entry drafted with a "Validated setup" recipe; 5.8 min, $2.46 |
 | Claude, Step 2 | cites the entry, 80×80 from the start, PASS; ~3 min, ~$1.25 |
-| Nemotron, Step 2, no knowledge | fine grid or trial and error; 20+ min, often no clean verdict |
+| Nemotron, Step 2, no knowledge | skips the tutorial mesh for 128×128, 8 solver runs, 16 min; a borderline PASS (u 4.4 %, v 4.3 % vs 5 %). With the entry: 80×80, u 0.6 %, v 0.1 % |
 | Nemotron, Step 2, with knowledge | PASS, but 15–23 min |
 | Nemotron directs Muse | PASS in ~17 min; ~90% fewer frontier tokens (9.5 M → 0.8 M) |
-| Muse, open-ended, with knowledge | finishes on its own; may not apply every lesson (REVIEW) |
+| Muse, open-ended, with knowledge | finishes on its own in ~5 min, fixes setup errors itself, but its validation script never produces valid numbers; it narrates a pass anyway and the banner shows REVIEW ("not backed by the validation metrics"): a teaching moment |
 | Muse, targeted prompt | PASS in ~1 min, no failed tool calls |
 
 ## If something goes wrong
