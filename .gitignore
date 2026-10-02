@@ -107,3 +107,6 @@ setup.log
 .hpc/
 .doctor.*/
 !workshop/recorded/**/*.png
+
+# workshop.sh fork copies
+cases/scenarios/*--*.yaml

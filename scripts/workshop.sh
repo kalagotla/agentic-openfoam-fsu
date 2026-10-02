@@ -5,6 +5,9 @@
 #   ./scripts/workshop.sh status     what the corpus and work dirs hold now
 #   ./scripts/workshop.sh promote    review + promote the draft corpus entry (Step 1 -> Step 2)
 #   ./scripts/workshop.sh demote     turn the entry back into a draft (show a run without it)
+#   ./scripts/workshop.sh fork <scenario> <tag> [--auto]
+#                                    copy a scenario under a new name (its own case folder),
+#                                    so two agents can run it side by side; --auto = no pauses
 #   ./scripts/workshop.sh reset      clear the work cases, keep the corpus (re-run Step 2)
 #   ./scripts/workshop.sh reset-all  also forget the earned entry (start again at Step 1)
 #
@@ -76,10 +79,22 @@ demote() {
     echo "Demoted to $DRAFT: runs no longer see it. './scripts/workshop.sh promote' restores it."
 }
 
+fork() {
+    local base=${1:?usage: workshop.sh fork <scenario> <tag> [--auto]} tag=${2:?usage: workshop.sh fork <scenario> <tag> [--auto]}
+    base=${base%.yaml}; base=${base##*/}
+    local src=cases/scenarios/$base.yaml dst=cases/scenarios/$base--$tag.yaml
+    [[ -f $src ]] || { echo "No scenario $src"; exit 1; }
+    sed -e "s/^name: .*/name: $base--$tag/" "$src" >"$dst"
+    [[ ${3:-} == --auto ]] && sed -i 's/^automation_level: .*/automation_level: 5/' "$dst"
+    echo "Wrote $dst (case folder cases/work/$base--$tag$([[ ${3:-} == --auto ]] && echo ', runs without pauses'))."
+    echo "Run it with: Set up and run $dst"
+}
+
 case "${1:-status}" in
     status)    status ;;
     promote)   promote ;;
     demote)    demote ;;
+    fork)      shift; fork "$@" ;;
     reset)     reset_work ;;
     reset-all) reset_work; rm -f "$ENTRY" "$DRAFT"; echo "Removed $ENTRY — the corpus is empty again (Step 1)." ;;
     -h|--help) sed -n '2,9p' "$0" ;;

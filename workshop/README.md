@@ -192,21 +192,27 @@ Recorded runs of every rung are in [`recorded/`](recorded/) as a fallback.
 - **Rung 5b** can also use the lean `cfd-local-plan` agent, which only
   executes plans.
 
-### A suggested session (FSU DC-QC, Oct 2, 2:00–4:00 PM)
+### The session (FSU DC-QC, Oct 2, 2:00–4:00 PM)
 
-The hands-on block is 2:35–3:45 (70 min):
+Three demos on one benchmark, sharing one corpus: a **frontier** model
+(Claude Code), a **mid-sized open** model (Nemotron 3 Ultra, free, in Kilo)
+and a **local** model (Muse Glimmer 30B). The presenter's minute-by-minute
+run sheet, with every command, is [`DEMO.md`](DEMO.md).
 
-| Time | Who drives | What |
-|---|---|---|
-| 10 min | everyone | `./scripts/doctor.sh` green, agent signed in |
-| 15 min | rung 1 | Step 1 with Claude Code; promote the entry |
-| 10 min | rung 1 | Step 2 with the same agent: watch it cite the entry |
-| 10 min | rung 2 | Step 2 again, Claude planning for the local model |
-| 15 min | rungs 3–4 | Step 2 with the free open model, alone and orchestrating (or show `recorded/`) |
-| 10 min | rung 5 | Step 2 local-only: open-ended, then the targeted prompt |
+| Time | What |
+|---|---|
+| 2:00 | Clone and `./setup.sh` (laptop or cluster); setup runs during the slides |
+| 2:05 | Slides. A Nemotron run *without* knowledge starts in the background |
+| 2:40 | Frontier: Claude, Step 1 (grid study, GCI, REPORT.md, corpus draft) → promote |
+| 2:55 | Frontier: Claude, Step 2 at Re = 1000 with the entry |
+| 3:05 | Mid-size: the no-knowledge result; Nemotron with the entry, and Nemotron directing the local model (token savings) start in the background |
+| 3:10 | Local: Muse with the entry, open-ended, then the targeted prompt |
+| 3:25 | Mid-size results: with vs without knowledge, frontier tokens alone vs directing the local model |
+| 3:35 | The ladder, wrap-up, Q&A |
 
-The speaker's GPU job is booked from 11:00 AM to 5:00 PM (`scripts/hpc-gpu.sh status`);
-if it has not started, show [`recorded/`](recorded/) for the local rungs.
+Run several agents side by side with `./scripts/workshop.sh fork
+<scenario> <tag> --auto` (its own case folder, no pauses). Show token use
+with `python3 scripts/session-tokens.py <session> [<session>]`.
 
 ## 3. When things go wrong
 

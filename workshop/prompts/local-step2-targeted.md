@@ -26,12 +26,12 @@ If a call returns `success: false`, stop and report its `reason` and
 1. `consultant_get_tutorial_annotation`
    `{"tutorial_path": "incompressible/icoFoam/cavity/cavity"}`
 2. `openfoam_prepare_case`
-   `{"case_path": "cases/work/lid-cavity-re1000"}`
+   `{"case_path": "cases/work/lid-cavity-re1000--plan"}`
 3. `openfoam_copy_tutorial_dict`
-   `{"case_path": "cases/work/lid-cavity-re1000", "tutorial_path": "incompressible/icoFoam/cavity/cavity/system/blockMeshDict", "dict_name": "blockMeshDict", "subdir": "system", "replacements": {"scale 0.1;": "scale 1;", "(20 20 1)": "(80 80 1)"}}`
+   `{"case_path": "cases/work/lid-cavity-re1000--plan", "tutorial_path": "incompressible/icoFoam/cavity/cavity/system/blockMeshDict", "dict_name": "blockMeshDict", "subdir": "system", "replacements": {"scale 0.1;": "scale 1;", "(20 20 1)": "(80 80 1)"}}`
 4. `openfoam_copy_tutorial_dict`
-   `{"case_path": "cases/work/lid-cavity-re1000", "tutorial_path": "incompressible/simpleFoam/pitzDaily/system/controlDict", "dict_name": "controlDict", "subdir": "system", "replacements": {"endTime 2000;": "endTime 5000;", "writeInterval 100;": "writeInterval 1000;", "#includeFunc streamlines": "#include \"centreline\""}}`
-5. `write` the file `cases/work/lid-cavity-re1000/system/centreline` with this content:
+   `{"case_path": "cases/work/lid-cavity-re1000--plan", "tutorial_path": "incompressible/simpleFoam/pitzDaily/system/controlDict", "dict_name": "controlDict", "subdir": "system", "replacements": {"endTime 2000;": "endTime 5000;", "writeInterval 100;": "writeInterval 1000;", "#includeFunc streamlines": "#include \"centreline\""}}`
+5. `write` the file `cases/work/lid-cavity-re1000--plan/system/centreline` with this content:
 
    ```
    centreline
@@ -50,26 +50,26 @@ If a call returns `success: false`, stop and report its `reason` and
    }
    ```
 6. `openfoam_copy_tutorial_dict`
-   `{"case_path": "cases/work/lid-cavity-re1000", "tutorial_path": "incompressible/simpleFoam/pitzDaily/system/fvSchemes", "dict_name": "fvSchemes", "subdir": "system"}`
+   `{"case_path": "cases/work/lid-cavity-re1000--plan", "tutorial_path": "incompressible/simpleFoam/pitzDaily/system/fvSchemes", "dict_name": "fvSchemes", "subdir": "system"}`
 7. `openfoam_copy_tutorial_dict`
-   `{"case_path": "cases/work/lid-cavity-re1000", "tutorial_path": "incompressible/simpleFoam/pitzDaily/system/fvSolution", "dict_name": "fvSolution", "subdir": "system", "replacements": {"p 1e-2;": "p 1e-5;", "U 1e-3;": "U 1e-5;", "consistent yes;": "consistent yes; pRefCell 0; pRefValue 0;"}}`
+   `{"case_path": "cases/work/lid-cavity-re1000--plan", "tutorial_path": "incompressible/simpleFoam/pitzDaily/system/fvSolution", "dict_name": "fvSolution", "subdir": "system", "replacements": {"p 1e-2;": "p 1e-5;", "U 1e-3;": "U 1e-5;", "consistent yes;": "consistent yes; pRefCell 0; pRefValue 0;"}}`
 8. `openfoam_copy_tutorial_dict`
-   `{"case_path": "cases/work/lid-cavity-re1000", "tutorial_path": "incompressible/simpleFoam/pitzDaily/constant/transportProperties", "dict_name": "transportProperties", "subdir": "constant", "replacements": {"nu 1e-05;": "nu 0.001;"}}`
+   `{"case_path": "cases/work/lid-cavity-re1000--plan", "tutorial_path": "incompressible/simpleFoam/pitzDaily/constant/transportProperties", "dict_name": "transportProperties", "subdir": "constant", "replacements": {"nu 1e-05;": "nu 0.001;"}}`
 9. `openfoam_copy_tutorial_dict`
-   `{"case_path": "cases/work/lid-cavity-re1000", "tutorial_path": "incompressible/simpleFoam/pitzDaily/constant/turbulenceProperties", "dict_name": "turbulenceProperties", "subdir": "constant", "replacements": {"simulationType RAS;": "simulationType laminar;"}}`
+   `{"case_path": "cases/work/lid-cavity-re1000--plan", "tutorial_path": "incompressible/simpleFoam/pitzDaily/constant/turbulenceProperties", "dict_name": "turbulenceProperties", "subdir": "constant", "replacements": {"simulationType RAS;": "simulationType laminar;"}}`
 10. `openfoam_copy_tutorial_dict`
-    `{"case_path": "cases/work/lid-cavity-re1000", "tutorial_path": "incompressible/icoFoam/cavity/cavity/0/U", "dict_name": "U", "subdir": "0"}`
+    `{"case_path": "cases/work/lid-cavity-re1000--plan", "tutorial_path": "incompressible/icoFoam/cavity/cavity/0/U", "dict_name": "U", "subdir": "0"}`
 11. `openfoam_copy_tutorial_dict`
-    `{"case_path": "cases/work/lid-cavity-re1000", "tutorial_path": "incompressible/icoFoam/cavity/cavity/0/p", "dict_name": "p", "subdir": "0"}`
+    `{"case_path": "cases/work/lid-cavity-re1000--plan", "tutorial_path": "incompressible/icoFoam/cavity/cavity/0/p", "dict_name": "p", "subdir": "0"}`
 12. `openfoam_record_step`
-    `{"case_path": "cases/work/lid-cavity-re1000", "phase": "geometry", "status": "ok", "title": "Setup from the corpus entry: icoFoam/cavity geometry, pitzDaily SIMPLE controls, 80x80, nu 0.001", "decision": "Apply the promoted corpus entry for incompressible/icoFoam/cavity/cavity at Re = 1000", "citations": ["corpus/incompressible/icoFoam/cavity/cavity.md"]}`
-13. `openfoam_run_blockmesh` `{"case_path": "cases/work/lid-cavity-re1000"}`
-14. `openfoam_check_mesh` `{"case_path": "cases/work/lid-cavity-re1000"}`
-15. `openfoam_run_solver` `{"case_path": "cases/work/lid-cavity-re1000", "solver": "simpleFoam"}`
+    `{"case_path": "cases/work/lid-cavity-re1000--plan", "phase": "geometry", "status": "ok", "title": "Setup from the corpus entry: icoFoam/cavity geometry, pitzDaily SIMPLE controls, 80x80, nu 0.001", "decision": "Apply the promoted corpus entry for incompressible/icoFoam/cavity/cavity at Re = 1000", "citations": ["corpus/incompressible/icoFoam/cavity/cavity.md"]}`
+13. `openfoam_run_blockmesh` `{"case_path": "cases/work/lid-cavity-re1000--plan"}`
+14. `openfoam_check_mesh` `{"case_path": "cases/work/lid-cavity-re1000--plan"}`
+15. `openfoam_run_solver` `{"case_path": "cases/work/lid-cavity-re1000--plan", "solver": "simpleFoam"}`
 16. `openfoam_record_step`
-    `{"case_path": "cases/work/lid-cavity-re1000", "phase": "convergence", "status": "ok", "title": "80x80 mesh, simpleFoam converged"}`
+    `{"case_path": "cases/work/lid-cavity-re1000--plan", "phase": "convergence", "status": "ok", "title": "80x80 mesh, simpleFoam converged"}`
     and put the cell count (step 13) and final residuals (step 15) in `body`.
-17. `write` the file `cases/work/lid-cavity-re1000/analysis/validate.py` with this content:
+17. `write` the file `cases/work/lid-cavity-re1000--plan/analysis/validate.py` with this content:
 
     ```python
     import os
@@ -91,9 +91,9 @@ If a call returns `success: false`, stop and report its `reason` and
     fig.savefig("postProcessing/analysis/centerlines.png", dpi=120)
     emit({"u_centerline": u, "v_centerline": v}, plots=["postProcessing/analysis/centerlines.png"])
     ```
-18. `validation_run_analysis` `{"case_path": "cases/work/lid-cavity-re1000"}`
+18. `validation_run_analysis` `{"case_path": "cases/work/lid-cavity-re1000--plan"}`
 19. `openfoam_record_step`
-    `{"case_path": "cases/work/lid-cavity-re1000", "phase": "validation", "status": "ok", "title": "Ghia Re=1000 centerlines vs the 5% band", "citations": ["ghia_1982", "corpus/incompressible/icoFoam/cavity/cavity.md"]}`
+    `{"case_path": "cases/work/lid-cavity-re1000--plan", "phase": "validation", "status": "ok", "title": "Ghia Re=1000 centerlines vs the 5% band", "citations": ["ghia_1982", "corpus/incompressible/icoFoam/cavity/cavity.md"]}`
     with the two `l2_error` values from step 18 in `body`; use `"status": "error"` if either `within_tolerance` is false.
-20. `openfoam_finalize_report` `{"case_path": "cases/work/lid-cavity-re1000"}`
+20. `openfoam_finalize_report` `{"case_path": "cases/work/lid-cavity-re1000--plan"}`
     Then reply with the two L2 values and the verdict.
