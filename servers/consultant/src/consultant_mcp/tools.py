@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import re
+import statistics
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +36,7 @@ from consultant_mcp.assessments import (
     MeshThresholds,
     ResidualThresholds,
     assess_aspect_ratio,
+    assess_grid_convergence_numbers,
     assess_non_orthogonality,
     assess_residual_pattern,
     assess_severe_non_orthogonal,
@@ -235,6 +237,76 @@ def assess_mesh_quality(
         "overall_verdict": overall,
         "metrics": [v.to_dict() for v in verdicts],
         "citation_sources": citation_sources,
+        "summary": summary,
+    }
+
+
+def assess_grid_convergence(
+    h: list[float],
+    values: list[Any],
+    quantity: str = "",
+    gci_target: float = 0.05,
+) -> ToolResult:
+    """Verdict on a three-grid convergence study: is the result grid-converged?
+
+    The number comes from the tested ``validation.grid_convergence_index``
+    (Celik et al. 2008 GCI); this tool reads it the way a CFD reviewer
+    would and says what to do next, like ``assess_residuals`` does for a
+    residual history.
+
+    Args:
+        h: Representative cell size of each grid (e.g. ``[1/20, 1/40, 1/80]``).
+        values: The solution on each grid in the same order: one scalar per
+            grid, or a profile sampled at the same stations on every grid.
+        quantity: Name for the summary (e.g. ``"v_centerline"``).
+        gci_target: Acceptable fine-grid uncertainty (default 0.05 = 5 %).
+            Use the scenario's validation tolerance when it has one.
+
+    Returns:
+        ``{success, verdict (good | acceptable | marginal | poor),
+        apparent_order, gci_fine, asymptotic_ratio, convergence,
+        recommendation, cites, gci (the full validation result), summary}``.
+        Use ``summary`` as the ``why`` of the record_step that reports the
+        study and cite ``celik_2008``. For profiles, ``gci_fine`` is the
+        median over stations (stations where the solution is near zero give
+        large relative GCI); the full per-station values are under ``gci``.
+    """
+    from validation_mcp.tools import grid_convergence_index
+
+    r = grid_convergence_index(h, values)
+    if not r.get("success"):
+        return r
+    name = quantity or "the quantity"
+    if "summary" in r:  # profile
+        sm = r["summary"]
+        p = sm.get("apparent_order_mean")
+        g = [x for x in r.get("gci_fine", []) if x is not None]
+        a = [x for x in r.get("asymptotic_ratio", []) if x is not None]
+        gci = statistics.median(g) if g else None
+        asym = statistics.median(a) if a else None
+        counts = sm.get("convergence_counts", {})
+        convergence = max(counts, key=counts.get) if counts else "unknown"
+    else:
+        p, gci = r.get("apparent_order"), r.get("gci_fine")
+        asym, convergence = r.get("asymptotic_ratio"), r.get("convergence")
+
+    mv = assess_grid_convergence_numbers(convergence, p, gci, asym, gci_target)
+    verdict, rec = mv.verdict, mv.recommendation
+    p_txt = "n/a" if p is None else f"{p:.2f}"
+    gci_txt = "n/a" if gci is None else f"{gci:.1%}"
+    summary = (f"Three-grid GCI study of {name} (Celik et al. 2008): {convergence} convergence, "
+               f"apparent order {p_txt}, fine-grid GCI {gci_txt}. Verdict: {verdict}. {rec}")
+    return {
+        "success": True,
+        "verdict": verdict,
+        "apparent_order": p,
+        "gci_fine": gci,
+        "asymptotic_ratio": asym,
+        "convergence": convergence,
+        "recommendation": rec,
+        "cites": ["celik_2008"],
+        "citation_sources": {"celik_2008": CITATION_SOURCES["celik_2008"]},
+        "gci": r,
         "summary": summary,
     }
 

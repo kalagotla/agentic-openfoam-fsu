@@ -25,7 +25,7 @@ Four MCP servers (`openfoam`, `validation`, `consultant`, `research_assistant`) 
 │+ live  │ │+ converg.│ │ annotation │ │  examples +  │
 │REPORT  │ │  classifr│ │  lookup    │ │ user-dir     │
 │        │ │          │ │            │ │  layout      │
-│17 tools│ │ 6 tools  │ │  7 tools   │ │   3 tools    │
+│17 tools│ │ 7 tools  │ │  8 tools   │ │   3 tools    │
 └───┬────┘ └────┬─────┘ └─────┬──────┘ └──────┬───────┘
     ▼           ▼             ▼               ▼
  OpenFOAM   cases/*/      tutorial_     $WM_PROJECT_

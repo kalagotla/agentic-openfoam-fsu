@@ -118,9 +118,12 @@ runnable OpenFOAM case at `cases/work/<name>/` from that description.
      breaks when the case is archived and relocated.
    `list_references` / `check_convergence` remain available for discovery and
    residual classification. When the scenario asks for a grid-convergence
-   study (`validation.grid_convergence`), compute it with
-   `validation.grid_convergence_index` on three systematically refined grids
-   (cite `celik_2008`) and report the apparent order and GCI. If validation fails, diagnose and re-author the
+   study (`validation.grid_convergence`), run three systematically refined
+   grids and call `consultant.assess_grid_convergence` with the cell sizes
+   and the solutions (profiles at common stations): it computes the GCI
+   through the tested `validation.grid_convergence_index` (Celik et al.
+   2008) and returns a verdict and next step. Record its `summary` and cite
+   `celik_2008`. If validation fails, diagnose and re-author the
    relevant dict or the analysis script — don't just rerun.
 8. Render fields with `export_field_image` for a visual sanity check.
 

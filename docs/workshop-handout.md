@@ -35,11 +35,11 @@ Anthropic API or any OpenAI-compatible server. See
 
 ## Tool surface
 
-33 tools across four servers, each returning `{success: bool, ...}`:
+35 tools across four servers, each returning `{success: bool, ...}`:
 
 - **openfoam** (17) — `list_tutorials` / `read_tutorial_file` / `prepare_case` / `write_dict` / `copy_tutorial_dict` / `run_blockmesh` / `check_mesh` / `prepare_surface_mesh` / `run_snappy_hex_mesh` / `decompose_par` / `reconstruct_par` / `run_solver` / `get_residuals` / `export_field_image` / `record_step` / `finalize_report` / `archive_case`
-- **validation** (6) — `list_references` / `read_reference` / `compare_profiles` / `compare_scalar` / `check_convergence` / `run_analysis`
-- **consultant** (7) — `assess_mesh_quality` / `assess_residuals` / `assess_y_plus` / `get_tutorial_annotation` / `list_tutorial_annotations` / `draft_annotation_from_report` / `flag_uncited_claims`
+- **validation** (7) — `list_references` / `read_reference` / `compare_profiles` / `compare_scalar` / `check_convergence` / `grid_convergence_index` / `run_analysis`
+- **consultant** (8) — `assess_mesh_quality` / `assess_residuals` / `assess_y_plus` / `assess_grid_convergence` / `get_tutorial_annotation` / `list_tutorial_annotations` / `draft_annotation_from_report` / `flag_uncited_claims`
 - **research_assistant** (3) — `wmake_and_report` / `find_examples_of_base_class` / `discover_user_lib_path`
 
 Full surface and per-tool signatures in [`architecture.md`](architecture.md).

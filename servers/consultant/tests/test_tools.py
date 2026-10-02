@@ -1611,3 +1611,35 @@ class TestFlagUncitedClaims:
             "is the diagnostic.\n",
         )
         assert "regime_claim" not in self._signals(flag_uncited_claims(case))
+
+
+class TestAssessGridConvergence:
+    def test_good_when_second_order_and_small(self) -> None:
+        from consultant_mcp.tools import assess_grid_convergence
+
+        h = [0.05, 0.025, 0.0125]
+        r = assess_grid_convergence(h, [1 + 3 * x**2 for x in h], quantity="Cd")
+        assert r["success"] and r["verdict"] == "good"
+        assert r["apparent_order"] == pytest.approx(2.0, abs=1e-6)
+        assert "celik_2008" in r["cites"] and "Cd" in r["summary"]
+
+    def test_marginal_when_uncertainty_above_target(self) -> None:
+        from consultant_mcp.tools import assess_grid_convergence
+
+        h = [1.0, 2.0, 4.0]
+        r = assess_grid_convergence(h, [1 + 0.5 * x for x in h], gci_target=0.05)
+        assert r["verdict"] == "marginal" and "refine" in r["recommendation"]
+
+    def test_oscillatory_and_divergent(self) -> None:
+        from consultant_mcp.tools import assess_grid_convergence
+
+        assert assess_grid_convergence([1, 2, 4], [1.0, 1.1, 0.95])["verdict"] == "marginal"
+        assert assess_grid_convergence([1, 2, 4], [1.0, 1.2, 1.25])["verdict"] == "poor"
+
+    def test_profile_uses_median(self) -> None:
+        from consultant_mcp.tools import assess_grid_convergence
+
+        h = [1 / 20, 1 / 40, 1 / 80]
+        prof = [[1 + 2 * x**2, 2 - 5 * x**2, 0.5 + x**2] for x in h]
+        r = assess_grid_convergence(h, prof, quantity="u_centerline")
+        assert r["success"] and r["verdict"] == "good"

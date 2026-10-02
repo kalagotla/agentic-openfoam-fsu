@@ -59,6 +59,7 @@ Reference-data library plus case-agnostic comparison primitives, and a runner fo
 - `read_reference(name)` → parsed JSON for one named reference (filename stem)
 - `compare_profiles(sim_axis, sim_field, ref_axis, ref_field, tolerance)` → L2 / L∞ error with a tolerance gate
 - `compare_scalar(sim_value, ref_value, tolerance_relative, tolerance_absolute)` → relative-or-absolute error for a single coefficient (Cl/Cd, reattachment length) — the case `compare_profiles` rejects as `too_few_points`
+- `grid_convergence_index(h, values, safety_factor)` → three-grid GCI (Celik et al. 2008): apparent order, Richardson extrapolation, fine/medium GCI, asymptotic-range ratio; scalars or profiles at common stations
 - `check_convergence(residual_history, threshold, stall_window)` → converged / diverged / stalled / still_running
 - `run_analysis(case_path, script, args, timeout_s)` → runs the agent-authored `analysis/validate.py` in a hardened subprocess (own process group, RLIMIT caps, minimal env, headless single-threaded numerics), captures its `<<<ANALYSIS_RESULT>>>` JSON metrics + verified plot paths. The script extracts + plots; it scores via `compare_profiles`, so the verdict stays on tested code.
 
@@ -80,6 +81,7 @@ Reasons over the other servers' output. CFD-domain verdicts with thresholds, rec
 - `assess_mesh_quality(case_path)` → per-metric verdicts (non-orthogonality, skewness, aspect ratio, severe-face count) with thresholds and remedies
 - `assess_residuals(case_path)` → per-field convergence classification with recommendations (URF, scheme order, mesh quality)
 - `assess_y_plus(case_path, time)` → wall-patch y+ vs the turbulence model's wall-treatment assumption
+- `assess_grid_convergence(h, values, quantity, gci_target)` → good / acceptable / marginal / poor verdict on a GCI study (via `validation.grid_convergence_index`), with the refinement needed when it falls short
 - `get_tutorial_annotation(tutorial_path)` → fetches the annotation under `corpus/`
 - `list_tutorial_annotations()` → enumerate the corpus
 - `draft_annotation_from_report(case_path, tutorial_path)` → drafts a candidate annotation file by parsing the run's per-step decision entries (full why / alternatives / when-it-breaks + citations, not the compact index); writes `.draft.md` for the human to review and rename to promote

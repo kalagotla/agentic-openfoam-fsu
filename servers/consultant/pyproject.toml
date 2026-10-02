@@ -8,6 +8,7 @@ dependencies = [
     "fastmcp>=3.0",
     "pydantic>=2.0",
     "pyyaml>=6.0",
+    "validation-mcp",
 ]
 
 [build-system]
@@ -19,3 +20,6 @@ packages = ["src/consultant_mcp"]
 
 [project.scripts]
 consultant-mcp = "consultant_mcp.__main__:main"
+
+[tool.uv.sources]
+validation-mcp = { workspace = true }

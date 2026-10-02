@@ -285,6 +285,7 @@ dependencies = [
     { name = "fastmcp" },
     { name = "pydantic" },
     { name = "pyyaml" },
+    { name = "validation-mcp" },
 ]
 
 [package.metadata]
@@ -292,6 +293,7 @@ requires-dist = [
     { name = "fastmcp", specifier = ">=3.0" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pyyaml", specifier = ">=6.0" },
+    { name = "validation-mcp", editable = "servers/validation" },
 ]
 
 [[package]]

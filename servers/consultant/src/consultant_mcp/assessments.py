@@ -522,6 +522,56 @@ def assess_severe_non_orthogonal(
 # authoritative source AND a resolvable locator (a real file path in the
 # OpenFOAM v2412 tree, a fetched doc URL, or a book + ISBN/chapter).
 # Keep this in sync with the reference list in the module docstring.
+def assess_grid_convergence_numbers(
+    convergence: str,
+    apparent_order: float | None,
+    gci_fine: float | None,
+    asymptotic_ratio: float | None,
+    gci_target: float = 0.05,
+) -> MetricVerdict:
+    """Verdict on a three-grid GCI study (Celik et al. 2008).
+
+    good: monotonic, fine-grid GCI within target, asymptotic ratio within
+    0.1 of 1. acceptable: GCI within target but not clearly asymptotic.
+    marginal: oscillatory, no usable order, or GCI above target (with the
+    refinement factor needed). poor: divergent.
+    """
+    p, gci, asym = apparent_order, gci_fine, asymptotic_ratio
+    band = f"GCI_fine <= {gci_target:.0%}, |asymptotic ratio - 1| <= 0.1"
+    if convergence == "divergent":
+        verdict, rec = "poor", (
+            "The change between grids grows with refinement: the solution is not converging. "
+            "Check the setup (schemes, convergence of each solve) before refining further.")
+    elif convergence == "oscillatory":
+        verdict, rec = "marginal", (
+            "Oscillatory convergence: the GCI is not a reliable error bound. Report the spread "
+            "of the three solutions, and add a finer grid if the spread exceeds the tolerance.")
+    elif gci is None or p is None:
+        verdict, rec = "marginal", "No usable apparent order (the solutions barely change or the order is undefined)."
+    elif gci > gci_target:
+        need = (gci / gci_target) ** (1.0 / max(p, 0.5))
+        verdict, rec = "marginal", (
+            f"Fine-grid uncertainty {gci:.1%} exceeds the {gci_target:.0%} target: refine "
+            f"about {need:.1f}x further in each direction and repeat the study.")
+    elif asym is not None and abs(asym - 1.0) <= 0.1:
+        verdict, rec = "good", (
+            f"Grid-converged: in the asymptotic range (ratio {asym:.2f}), fine-grid uncertainty "
+            f"{gci:.1%}. Report the fine-grid value with this GCI.")
+    else:
+        ratio = "n/a" if asym is None else f"{asym:.2f}"
+        verdict, rec = "acceptable", (
+            f"Fine-grid uncertainty {gci:.1%} is within target, but the grids are not clearly in "
+            f"the asymptotic range (ratio {ratio}); one more refinement would confirm.")
+    return MetricVerdict(
+        metric="grid_convergence_index",
+        value=gci,
+        verdict=verdict,
+        threshold_band=band,
+        recommendation=rec,
+        cites=["celik_2008"],
+    )
+
+
 CITATION_SOURCES: dict[str, str] = {
     "of_check_mesh_src": (
         "OpenFOAM v2412 checkMesh defaults — $FOAM_SRC/OpenFOAM/meshes/"
@@ -550,6 +600,13 @@ CITATION_SOURCES: dict[str, str] = {
         "(relaxationFactors, residualControl, linear-solver tolerances) — "
         "https://www.openfoam.com/documentation/user-guide/6-solving/"
         "6.3-solution-and-algorithm-control"
+    ),
+    "celik_2008": (
+        "Celik, Ghia, Roache, Freitas, Coleman & Raad (2008), Procedure for "
+        "estimation and reporting of uncertainty due to discretization in "
+        "CFD applications, J. Fluids Eng. 130(7) 078001, "
+        "doi:10.1115/1.2960953 (three-grid GCI, apparent order, Fs = 1.25, "
+        "asymptotic-range check)."
     ),
     "versteeg": (
         "Versteeg & Malalasekera (2007), An Introduction to CFD: The "

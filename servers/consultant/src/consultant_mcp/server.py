@@ -90,6 +90,7 @@ mcp = FastMCP(
 mcp.tool()(tools.assess_mesh_quality)
 mcp.tool()(tools.assess_residuals)
 mcp.tool()(tools.assess_y_plus)
+mcp.tool()(tools.assess_grid_convergence)
 mcp.tool()(tools.get_tutorial_annotation)
 mcp.tool()(tools.list_tutorial_annotations)
 mcp.tool()(tools.draft_annotation_from_report)
