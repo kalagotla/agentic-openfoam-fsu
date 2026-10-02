@@ -98,7 +98,14 @@ status() {
     else
         echo "  starting Ollama…"
     fi
-    echo "  cfd-local now: $("$REPO_DIR/scripts/local-model.sh" --show | head -1)"
+    local now; now=$("$REPO_DIR/scripts/local-model.sh" --show | head -1)
+    if [[ $now == *"localhost:$TUNNEL_PORT"* ]]; then
+        echo "  cfd-local now (on the GPU): $now"
+    else
+        echo "  cfd-local now (on this node, not the GPU): $now"
+        echo "  'scripts/hpc-gpu.sh use' moves it to the GPU and picks the model for that card"
+        echo "  (muse-glimmer:30b on 20 GB+ GPUs, gpt-oss:20b on smaller ones)."
+    fi
 }
 
 use() {
