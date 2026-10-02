@@ -16,7 +16,8 @@ mcp = FastMCP(
         "vs a tolerance; ``compare_scalar`` does the same for a single "
         "coefficient (Cl/Cd, reattachment length, a peak value) where there "
         "is no profile to interpolate. ``check_convergence`` classifies a "
-        "residual history. Every tool returns ``{success: bool, ...}``. Nothing here "
+        "residual history; ``grid_convergence_index`` gives the GCI "
+        "(Celik et al. 2008) from three refined grids. Every tool returns ``{success: bool, ...}``. Nothing here "
         "is physics-specific; case-specific metrics (reattachment, Strouhal, "
         "Nusselt, ...) are the agent's job using OpenFOAM postProcessing "
         "output plus inline math."
@@ -28,4 +29,5 @@ mcp.tool()(tools.read_reference)
 mcp.tool()(tools.compare_profiles)
 mcp.tool()(tools.compare_scalar)
 mcp.tool()(tools.check_convergence)
+mcp.tool()(tools.grid_convergence_index)
 mcp.tool()(tools.run_analysis)

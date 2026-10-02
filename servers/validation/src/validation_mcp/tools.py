@@ -304,6 +304,137 @@ def compare_scalar(
     }
 
 
+def grid_convergence_index(
+    h: list[float],
+    values: list[Any],
+    safety_factor: float = 1.25,
+) -> ToolResult:
+    """Grid Convergence Index (GCI) from three systematically refined grids.
+
+    Implements the procedure of Celik et al. (2008), "Procedure for
+    estimation and reporting of uncertainty due to discretization in CFD
+    applications", J. Fluids Eng. 130(7) 078001 (doi:10.1115/1.2960953),
+    based on Roache's GCI. Cite it as ``celik_2008``.
+
+    Args:
+        h: Representative cell size of each grid, e.g. ``[1/20, 1/40, 1/80]``
+            (any order; sorted fine to coarse internally). For a uniform 2-D
+            grid, ``h = L / N``.
+        values: The solution on each grid, in the same order as ``h``: either
+            one scalar per grid (a coefficient, a peak value) or one list per
+            grid holding a profile sampled at the SAME stations on every
+            grid (e.g. the simulation interpolated onto the reference
+            stations).
+        safety_factor: Fs; 1.25 for three-grid studies.
+
+    Returns:
+        ``{success, refinement_ratios {r21, r32}, apparent_order p,
+        convergence (monotonic | oscillatory | divergent | mixed),
+        extrapolated (phi_ext), relative_error_fine e_a21, gci_fine
+        (GCI_21, the fine-grid uncertainty), gci_medium (GCI_32),
+        asymptotic_ratio (GCI_32 / (r21^p GCI_21), ~1 when in the
+        asymptotic range)}``. For profiles every field is per station plus
+        ``summary`` (mean p used, max and mean GCI_fine). Grid 1 is the
+        finest.
+    """
+    try:
+        hs = [float(x) for x in h]
+    except (TypeError, ValueError):
+        return {"success": False, "reason": "invalid_input", "detail": "h must be three numbers"}
+    if len(hs) != 3 or len(values) != 3 or min(hs) <= 0:
+        return {"success": False, "reason": "invalid_input",
+                "detail": "need exactly three positive cell sizes and three solutions"}
+    order = sorted(range(3), key=lambda i: hs[i])
+    h1, h2, h3 = (hs[i] for i in order)
+    try:
+        sols = [np.atleast_1d(np.asarray(values[i], dtype=float)) for i in order]
+    except (TypeError, ValueError):
+        return {"success": False, "reason": "invalid_input", "detail": "values must be numbers or equal-length lists"}
+    if len({v.shape for v in sols}) != 1:
+        return {"success": False, "reason": "invalid_input",
+                "detail": "profiles must be sampled at the same stations on every grid"}
+    phi1, phi2, phi3 = sols
+    r21, r32 = h2 / h1, h3 / h2
+    if r21 <= 1.0 or r32 <= 1.0:
+        return {"success": False, "reason": "invalid_input", "detail": "grids must be distinct (refinement ratio > 1)"}
+
+    # ratio = eps32 / eps21 = 1 / R in Celik's notation: monotonic convergence
+    # when the coarse-pair change exceeds the fine-pair change (ratio > 1).
+    eps21, eps32 = phi2 - phi1, phi3 - phi2
+    with np.errstate(divide="ignore", invalid="ignore"):
+        ratio = np.where(eps21 != 0, eps32 / eps21, np.nan)
+
+    def apparent_order(rt: float) -> float:
+        if not np.isfinite(rt) or rt == 0:
+            return float("nan")
+        s = 1.0 if rt > 0 else -1.0
+        p = abs(np.log(abs(rt))) / np.log(r21)
+        for _ in range(100):  # fixed-point iteration (Celik eq. 3)
+            q = np.log((r21 ** p - s) / (r32 ** p - s))
+            p_new = abs(np.log(abs(rt)) + q) / np.log(r21)
+            if not np.isfinite(p_new):
+                return float("nan")
+            if abs(p_new - p) < 1e-10:
+                return float(p_new)
+            p = max(p_new, 1e-6)
+        return float(p)
+
+    p_local = np.array([apparent_order(float(x)) for x in ratio])
+    kinds = np.where(np.isnan(ratio), "converged",
+                     np.where(ratio > 0, np.where(ratio > 1, "monotonic", "divergent"), "oscillatory"))
+    finite = p_local[np.isfinite(p_local)]
+    p_used = float(np.mean(finite)) if finite.size else float("nan")
+
+    def at(pv: float) -> dict[str, Any]:
+        rp = r21 ** pv
+        with np.errstate(divide="ignore", invalid="ignore"):
+            ext = (rp * phi1 - phi2) / (rp - 1.0)
+            e_a = np.abs((phi1 - phi2) / phi1)
+            gci21 = safety_factor * e_a / (rp - 1.0)
+            e_a32 = np.abs((phi2 - phi3) / phi2)
+            gci32 = safety_factor * e_a32 / (r32 ** pv - 1.0)
+            asym = gci32 / (rp * gci21)
+        return {"extrapolated": ext, "relative_error_fine": e_a, "gci_fine": gci21,
+                "gci_medium": gci32, "asymptotic_ratio": asym}
+
+    def clean(a: Any) -> Any:
+        a = np.asarray(a, dtype=float) if not isinstance(a, np.ndarray) or a.dtype.kind != "U" else a
+        if a.dtype.kind == "U":
+            return a.tolist()
+        return [None if not np.isfinite(x) else float(x) for x in a]
+
+    if phi1.size == 1:
+        kind = str(kinds[0])
+        if not np.isfinite(p_local[0]):
+            return {"success": True, "convergence": kind, "apparent_order": None,
+                    "refinement_ratios": {"r21": r21, "r32": r32},
+                    "detail": "no change between grids or no usable order; GCI undefined"}
+        res = at(float(p_local[0]))
+        return {"success": True, "refinement_ratios": {"r21": r21, "r32": r32},
+                "apparent_order": float(p_local[0]), "convergence": kind,
+                **{k: clean(v)[0] for k, v in res.items()}}
+
+    res = at(p_used)
+    gci = np.asarray(res["gci_fine"], dtype=float)
+    ok = gci[np.isfinite(gci)]
+    counts = {k: int(np.sum(kinds == k)) for k in ("monotonic", "oscillatory", "divergent", "converged")}
+    return {
+        "success": True,
+        "refinement_ratios": {"r21": r21, "r32": r32},
+        "apparent_order_local": clean(p_local),
+        "convergence_local": kinds.tolist(),
+        **{k: clean(v) for k, v in res.items()},
+        "summary": {
+            "apparent_order_mean": None if not np.isfinite(p_used) else p_used,
+            "gci_fine_max": float(ok.max()) if ok.size else None,
+            "gci_fine_mean": float(ok.mean()) if ok.size else None,
+            "convergence_counts": counts,
+            "note": "per-station GCI uses the mean apparent order (Celik et al. 2008); "
+                    "stations where the solution is near zero give large relative GCI",
+        },
+    }
+
+
 def check_convergence(
     residuals: dict[str, list[float]],
     threshold: float = 1e-4,

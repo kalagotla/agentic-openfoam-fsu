@@ -111,6 +111,9 @@ validation:
       - quantity: u_centerline
         reference_dataset: ghia_re_400_u_centerline
         tolerance_relative_L2: 0.05
+  grid_convergence:                  # optional: ask for a GCI study
+    method: GCI                      #   three refined grids; validation.grid_convergence_index
+    quantities: [u_centerline]
   qualitative_checks:
     - "residuals drop >= 4 orders of magnitude"
 ```

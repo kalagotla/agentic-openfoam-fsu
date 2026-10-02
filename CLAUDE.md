@@ -117,7 +117,10 @@ runnable OpenFOAM case at `cases/work/<name>/` from that description.
      working directory), never a hand-rolled relative path — that path
      breaks when the case is archived and relocated.
    `list_references` / `check_convergence` remain available for discovery and
-   residual classification. If validation fails, diagnose and re-author the
+   residual classification. When the scenario asks for a grid-convergence
+   study (`validation.grid_convergence`), compute it with
+   `validation.grid_convergence_index` on three systematically refined grids
+   (cite `celik_2008`) and report the apparent order and GCI. If validation fails, diagnose and re-author the
    relevant dict or the analysis script — don't just rerun.
 8. Render fields with `export_field_image` for a visual sanity check.
 

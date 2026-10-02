@@ -68,6 +68,9 @@ validation:
         reference_dataset: ghia_re_400_v_centerline
         tolerance_relative_L2: 0.05
 
+  grid_convergence:                 # discretization uncertainty
+    method: GCI                     # three systematically refined grids (Celik et al. 2008)
+    quantities: [u_centerline, v_centerline]
   qualitative_checks:               # free-text sanity checks
     - "residuals drop >= 4 orders of magnitude"
     - "primary vortex visible centered near (x ~ 0.55, y ~ 0.60)"

@@ -4,6 +4,7 @@
 #
 #   ./scripts/workshop.sh status     what the corpus and work dirs hold now
 #   ./scripts/workshop.sh promote    review + promote the draft corpus entry (Step 1 -> Step 2)
+#   ./scripts/workshop.sh demote     turn the entry back into a draft (show a run without it)
 #   ./scripts/workshop.sh reset      clear the work cases, keep the corpus (re-run Step 2)
 #   ./scripts/workshop.sh reset-all  also forget the earned entry (start again at Step 1)
 #
@@ -67,9 +68,18 @@ reset_work() {
     echo "Cleared cases/work/lid-cavity*, cases/examples/lid-cavity."
 }
 
+demote() {
+    # Back to a draft: the consultant stops returning it, the text is kept.
+    # Use it to show a run without the knowledge, then promote again.
+    if [[ ! -f $ENTRY ]]; then echo "No promoted entry at $ENTRY."; exit 1; fi
+    mv "$ENTRY" "$DRAFT"
+    echo "Demoted to $DRAFT: runs no longer see it. './scripts/workshop.sh promote' restores it."
+}
+
 case "${1:-status}" in
     status)    status ;;
     promote)   promote ;;
+    demote)    demote ;;
     reset)     reset_work ;;
     reset-all) reset_work; rm -f "$ENTRY" "$DRAFT"; echo "Removed $ENTRY — the corpus is empty again (Step 1)." ;;
     -h|--help) sed -n '2,9p' "$0" ;;
