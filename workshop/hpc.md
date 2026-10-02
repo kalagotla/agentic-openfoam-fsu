@@ -62,6 +62,7 @@ cd ~
 git clone https://github.com/kalagotla/agentic-openfoam-fsu.git agentic-openfoam
 cd agentic-openfoam
 ./setup.sh
+source ~/.bashrc
 ```
 
 No GitHub access from the cluster? The same repo is on the cluster as a
@@ -72,6 +73,7 @@ S=/gpfs/research/engineering/engineering_seminar/2026_10_02/agentic-openfoam-sha
 [ -d $S ] || S=/gpfs/research/engineering/dk26/agentic-openfoam-shared
 cd ~ && tar -xzf $S/agentic-openfoam.tar.gz
 cd agentic-openfoam && ./setup.sh
+source ~/.bashrc
 ```
 
 The heavy pieces are already on the cluster, in the class's shared store

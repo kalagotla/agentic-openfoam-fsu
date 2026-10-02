@@ -83,6 +83,7 @@ cd ~
 git clone https://github.com/kalagotla/agentic-openfoam-fsu.git agentic-openfoam
 cd agentic-openfoam
 ./setup.sh            # ~10–20 min, mostly downloads; safe to re-run
+source ~/.bashrc      # load the new PATH (or open a new terminal)
 ```
 
 `setup.sh` installs, skipping anything already present:
@@ -114,6 +115,7 @@ srun -A genacc_q -p genacc_q -c 8 --mem=32G -t 3:00:00 --pty bash -l     # CPU n
 # srun -A backfill2 -p backfill2 --gres=gpu:1 -c 8 --mem=48G -t 3:00:00 --pty bash -l
 git clone https://github.com/kalagotla/agentic-openfoam-fsu.git agentic-openfoam
 cd agentic-openfoam && ./setup.sh
+source ~/.bashrc     # load the new PATH and the OpenFOAM image path
 ```
 
 On the cluster there is no sudo and no apt. OpenFOAM v2412 comes from one
@@ -126,7 +128,7 @@ you. Details, GPU notes and the instructor's one-time image build are in
 
 ## Run
 
-Open a new terminal in the repo, then pick an agent:
+Run `source ~/.bashrc` (or open a new terminal) in the repo, then pick an agent:
 
 ```bash
 copilot    # GitHub Copilot CLI: Copilot Pro is free for students via GitHub Education (/login)

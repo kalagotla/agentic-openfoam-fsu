@@ -28,6 +28,7 @@ cd ~
 git clone https://github.com/kalagotla/agentic-openfoam-fsu.git agentic-openfoam
 cd agentic-openfoam
 ./setup.sh
+source ~/.bashrc     # load the new PATH (or open a new terminal)
 ```
 
 **On the FSU cluster** instead of a laptop: same clone and `./setup.sh`,
@@ -47,7 +48,7 @@ one). Every agent comes pre-wired to the four MCP servers. It takes 10–20 minu
 is safe; finished steps are skipped. If something fails, the last lines of
 `setup.log` say why, and `./scripts/doctor.sh` re-runs just the checks.
 
-Open a **new** terminal afterwards so the PATH changes apply.
+Then run `source ~/.bashrc` (or open a **new** terminal) so the PATH changes apply.
 
 ### Pick an agent and sign in
 
