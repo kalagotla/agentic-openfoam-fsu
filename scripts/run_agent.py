@@ -721,12 +721,23 @@ async def run_openai_compatible(
 
     for iteration in range(max_iters):
         try:
-            response = await client.chat.completions.create(
-                model=model,
-                messages=messages,
-                tools=openai_tools,
-                max_tokens=16384,
-            )
+            # Hosted gateways occasionally answer 200 with an error body and
+            # no choices (rate limit, upstream timeout). Retry those briefly
+            # instead of crashing the run.
+            for attempt in range(4):
+                response = await client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    tools=openai_tools,
+                    max_tokens=16384,
+                )
+                if response.choices:
+                    break
+                err = getattr(response, "error", None) or getattr(response, "model_extra", None)
+                print(f"[harness] empty response from the server ({str(err)[:200]}); retrying")
+                await asyncio.sleep(5 * (attempt + 1))
+            else:
+                raise RuntimeError("server returned no choices after 4 attempts")
             if ledger is not None:
                 ledger.iterations = iteration + 1
                 ledger.record_usage(getattr(response, "usage", None))
