@@ -26,6 +26,12 @@ follow it. Nemotron behaved the same in Kilo, the repo's own harness and
 Hermes (fine grid up front, 12–22 min, often no verdict), so the model, not
 the harness, limits rungs 3–4.
 
+## Usage levels, measured (Oct 2)
+
+Expert / guided / prompt inputs for the same cavity, two Claude Code runs
+each: the agent's share of setup choices goes 0–1 → 4–5 → 6, while
+consultant tool calls stay flat. See [spec-detail/](spec-detail/README.md).
+
 ---
 
 ## Earlier rehearsals (history)

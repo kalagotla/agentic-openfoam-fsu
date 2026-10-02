@@ -85,7 +85,13 @@ fork() {
     local src=cases/scenarios/$base.yaml dst=cases/scenarios/$base--$tag.yaml
     [[ -f $src ]] || { echo "No scenario $src"; exit 1; }
     sed -e "s/^name: .*/name: $base--$tag/" "$src" >"$dst"
-    [[ ${3:-} == --auto ]] && sed -i 's/^automation_level: .*/automation_level: 5/' "$dst"
+    if [[ ${3:-} == --auto ]]; then
+        if grep -q '^automation_level:' "$dst"; then
+            sed -i 's/^automation_level: .*/automation_level: 5/' "$dst"
+        else
+            sed -i "/^name: /a automation_level: 5" "$dst"
+        fi
+    fi
     echo "Wrote $dst (case folder cases/work/$base--$tag$([[ ${3:-} == --auto ]] && echo ', runs without pauses'))."
     echo "Run it with: Set up and run $dst"
 }
