@@ -31,7 +31,8 @@ cd agentic-openfoam
 source ~/.bashrc     # load the new PATH (or open a new terminal)
 ```
 
-**On the FSU cluster** instead of a laptop: same clone and `./setup.sh`,
+**On the FSU cluster** instead of a laptop: unpack the repo with
+`tar -xzf /gpfs/research/engineering/engineering_seminar/2026_10_02/agentic-openfoam-shared/agentic-openfoam.tar.gz` in your home, then `./setup.sh`,
 from an interactive compute node — see [`hpc.md`](hpc.md). Setup there
 takes about a minute (the large files are pre-staged), but the workshop
 accounts are CPU-only, so on the cluster you run the frontier rungs and

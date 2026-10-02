@@ -106,17 +106,18 @@ Change the local model later with `./scripts/local-model.sh <tag>`.
 ### FSU cluster (RCC)
 
 Start an interactive job **in a login shell** (compute nodes reach the
-internet only through RCC's web proxy, which login shells load), then clone
-and run the same script:
+internet only through RCC's web proxy, which login shells load), then unpack
+the repo from the workshop's shared folder and run the same script:
 
 ```bash
-srun -A genacc_q -p genacc_q -c 8 --mem=32G -t 3:00:00 --pty bash -l     # CPU node
-# local models need a GPU node instead, e.g.:
-# srun -A backfill2 -p backfill2 --gres=gpu:1 -c 8 --mem=48G -t 3:00:00 --pty bash -l
-git clone https://github.com/kalagotla/agentic-openfoam-fsu.git agentic-openfoam
+srun -A genacc_q -p genacc_q -c 8 --mem=32G -t 3:00:00 --pty bash -l     # CPU node (use the account/partition you were given)
+cd ~ && tar -xzf /gpfs/research/engineering/engineering_seminar/2026_10_02/agentic-openfoam-shared/agentic-openfoam.tar.gz
 cd agentic-openfoam && ./setup.sh
 source ~/.bashrc     # load the new PATH and the OpenFOAM image path
 ```
+
+Outside the workshop, `git clone https://github.com/kalagotla/agentic-openfoam-fsu.git agentic-openfoam`
+works the same way.
 
 On the cluster there is no sudo and no apt. OpenFOAM v2412 comes from one
 shared, portable Apptainer image (the cluster's own modules stop at

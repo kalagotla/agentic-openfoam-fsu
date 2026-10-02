@@ -57,24 +57,17 @@ Check the proxy is live: `echo $HTTPS_PROXY` should print
 
 ## 2. Set up
 
-```bash
-cd ~
-git clone https://github.com/kalagotla/agentic-openfoam-fsu.git agentic-openfoam
-cd agentic-openfoam
-./setup.sh
-source ~/.bashrc
-```
-
-No GitHub access from the cluster? The same repo is on the cluster as a
-tarball; unpack it instead of cloning:
+Unpack the repo from the workshop's shared folder (no GitHub needed):
 
 ```bash
-S=/gpfs/research/engineering/engineering_seminar/2026_10_02/agentic-openfoam-shared
-[ -d $S ] || S=/gpfs/research/engineering/dk26/agentic-openfoam-shared
-cd ~ && tar -xzf $S/agentic-openfoam.tar.gz
+cd ~ && tar -xzf /gpfs/research/engineering/engineering_seminar/2026_10_02/agentic-openfoam-shared/agentic-openfoam.tar.gz
 cd agentic-openfoam && ./setup.sh
 source ~/.bashrc
 ```
+
+Outside the workshop, clone it instead:
+`git clone https://github.com/kalagotla/agentic-openfoam-fsu.git agentic-openfoam`
+(the setup also finds the shared files in `/gpfs/research/engineering/dk26/agentic-openfoam-shared`).
 
 The heavy pieces are already on the cluster, in the class's shared store
 named in `workshop/hpc-site.env`, so setup downloads only the small ones:
