@@ -132,7 +132,7 @@ Open a new terminal in the repo, then pick an agent:
 copilot    # GitHub Copilot CLI: Copilot Pro is free for students via GitHub Education (/login)
 claude     # Claude Code
 codex      # OpenAI Codex CLI (ChatGPT sign-in)
-kilo       # Kilo: Tab cycles cfd | cfd-orchestrator (frontier + local) | cfd-local (local only)
+kilo       # Kilo: Tab cycles cfd | cfd-orchestrator | cfd-local | cfd-local-plan
 ```
 
 and give it a scenario:
@@ -149,7 +149,8 @@ tail -f cases/work/lid-cavity/REPORT.md
 
 **The workshop walkthrough is [`workshop/README.md`](workshop/README.md)**:
 the two-step persistent-knowledge demo (discover at Re = 400, reuse at
-Re = 1000), run as frontier only, frontier + local, and local only.
+Re = 1000), run down a ladder from a frontier model alone to a local model
+with a targeted prompt.
 
 ### Kilo agents
 
@@ -161,6 +162,7 @@ Re = 1000), run as frontier only, frontier + local, and local only.
 | `cfd-orchestrator` | a frontier model you select | reads, decides, narrates, and judges; has no case-changing tools, so it delegates each hands-on step to `cfd-worker` |
 | `cfd-worker` (subagent) | `ollama/cfd-local` | executes the delegated steps (dicts, mesh, solve, analysis) |
 | `cfd-local` | `ollama/cfd-local` | the full workflow on the local model, with a trimmed tool set and prompt sized for a 64k context |
+| `cfd-local-plan` | `ollama/cfd-local` | executes a step-by-step plan you paste or a frontier model writes (`scripts/local-worker.sh`, `docs/local-plan-format.md`) |
 
 Prompts live in `.kilo/prompts/`. The per-machine model context size is
 written to `.kilo/kilo.jsonc` (gitignored) by `scripts/local-model.sh`.

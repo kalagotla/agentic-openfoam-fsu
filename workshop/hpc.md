@@ -91,10 +91,10 @@ The shared store has US-developed models only:
 
 | Model | From | Size | Picked for |
 |---|---|---|---|
-| `gpt-oss:20b` | OpenAI | 14 GB | GPU node (the rehearsed default) |
+| `muse-glimmer:30b` | Meta | 18 GB | GPU job (20 GB+ cards): picked automatically by `hpc-gpu.sh use`; the most reliable tool caller we tested |
+| `gpt-oss:20b` | OpenAI | 14 GB | CPU nodes (picked by `setup.sh` without a GPU) and 14–20 GB GPUs |
 | `gemma4:12b` | Google | 8 GB | smaller GPU / CPU |
 | `nemotron-3-nano:4b` | NVIDIA | 2.8 GB | small machines |
-| `muse-glimmer:30b` | Meta | 18 GB | try on a 24 GB GPU |
 | `nemotron-3.5-lightning:30b` | NVIDIA | 25 GB | try on a 32 GB+ GPU |
 
 Switch with `./scripts/local-model.sh <model>`; a model in the store links
@@ -130,7 +130,7 @@ scripts/hpc-gpu.sh cancel        # release the GPU when done
 ```
 
 Until the job starts, the CPU node handles everything that does not need
-a local model (Loop A with any frontier agent). `use` opens an SSH tunnel
+a local model (rung 1 with any frontier agent). `use` opens an SSH tunnel
 from the CPU node (`localhost:11435`) to Ollama in the GPU job, because
 RCC's web proxy intercepts plain HTTP between nodes. The GPU job reads the
 same model store in your home directory, so it downloads nothing. If the

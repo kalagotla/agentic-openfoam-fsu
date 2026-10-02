@@ -8,8 +8,10 @@ Drove a CFD workflow with an AI agent through four MCP servers: set up,
 meshed, solved, and validated a 2-D lid-driven cavity against Ghia, Ghia &
 Shin (1982), with every decision narrated to `REPORT.md`. Then you ran it
 twice. The first run (Re = 400) earned a corpus entry and the second
-(Re = 1000) reused it. You drove it three ways: a frontier model alone, a
-frontier model directing a local one, and a local model alone.
+(Re = 1000) reused it. You drove the second run down a ladder: a frontier
+model alone, a frontier model planning for a local model, a large open
+model, and a local model alone. The local model only succeeded with a
+targeted prompt: the prompt matters as much as the model.
 
 ## Take it home
 
