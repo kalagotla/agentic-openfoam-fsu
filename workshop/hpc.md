@@ -12,7 +12,7 @@ same `./setup.sh`, the same agents, the same two-step demo.
 | Local-model rungs (2, 4, 5) | yes, at the speed of your GPU (≥ 20 GB VRAM ideal) | **CPU only**: workshop accounts get no GPU, and a local model on CPU is too slow for a full run. Watch the live GPU demo instead |
 | After the workshop | yours to keep | workshop accounts are temporary |
 
-The workshop accounts (`workshop-001` … `workshop-040`) are CPU-only; RCC
+The workshop accounts (`workshop-…`, signed in through <https://ood.rcc.fsu.edu>, Slurm account `workshop`, 24 GB) are CPU-only; RCC
 does not have enough free GPUs for a class to share. The local-model demos
 run live on one GPU, and their results are in [`recorded/`](recorded/).
 If your own account can use `gpu_q`, §4 shows how to put the local model
@@ -39,17 +39,26 @@ so `.mcp.json` and `kilo.jsonc` are the same on both.
 
 ## 1. Get a compute node, in a login shell
 
+**Workshop accounts (FSU DC-QC, Oct 2).**
+
+1. Open <https://ood.rcc.fsu.edu> (RCC's Open OnDemand) in a browser and sign
+   in with your `workshop-…` username and the shared password given in the
+   room.
+2. Open a shell from the **Clusters** menu. That shell is on a login node:
+   do not run setup there.
+3. Ask for a compute node on the `workshop` Slurm account (24 GB of memory),
+   with the command below.
+
 Compute nodes reach the internet only through RCC's web proxy, which is set
 up by **login** shells (`bash -l`). The agents need it (frontier models,
 `ollama pull`), so always start an interactive job with `bash -l`:
 
 ```bash
-srun -p <partition> -c 8 --mem=32G -t 3:00:00 --pty bash -l
+srun -A workshop -p workshop -c 4 --mem=24G -t 3:00:00 --pty bash -l
 ```
 
-Use the partition (and `-A <account>`) your instructor gives you; a
-workshop reservation adds `--reservation=<name>`. On a research account,
-`-A genacc_q -p genacc_q` is the general CPU queue. If you work through VS Code
+On a research account, use your own account, or `-A genacc_q -p genacc_q`
+(the general CPU queue), with `-c 8 --mem=32G`. If you work through VS Code
 Remote-SSH on a node, its terminals are login shells already.
 
 Check the proxy is live: `echo $HTTPS_PROXY` should print

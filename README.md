@@ -105,12 +105,23 @@ Change the local model later with `./scripts/local-model.sh <tag>`.
 
 ### FSU cluster (RCC)
 
+**Workshop accounts (FSU DC-QC, Oct 2).**
+
+1. Open <https://ood.rcc.fsu.edu> (RCC's Open OnDemand) in a browser and sign
+   in with your `workshop-…` username and the shared password given in the
+   room.
+2. Open a shell from the **Clusters** menu. That shell is on a login node:
+   do not run setup there.
+3. Ask for a compute node on the `workshop` Slurm account (24 GB of memory),
+   then install as below.
+
 Start an interactive job **in a login shell** (compute nodes reach the
 internet only through RCC's web proxy, which login shells load), then unpack
 the repo from the workshop's shared folder and run the same script:
 
 ```bash
-srun -A genacc_q -p genacc_q -c 8 --mem=32G -t 3:00:00 --pty bash -l     # CPU node (use the account/partition you were given)
+srun -A workshop -p workshop -c 4 --mem=24G -t 3:00:00 --pty bash -l   # workshop accounts
+# research accounts: srun -A genacc_q -p genacc_q -c 8 --mem=32G -t 3:00:00 --pty bash -l
 cd ~ && tar -xzf /gpfs/research/engineering/engineering_seminar/2026_10_02/agentic-openfoam-shared/agentic-openfoam.tar.gz
 cd agentic-openfoam && ./setup.sh
 source ~/.bashrc     # load the new PATH and the OpenFOAM image path
