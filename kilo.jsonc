@@ -79,7 +79,9 @@
       // and tempts the model into detours (logs via bash, todo lists).
       "tools": {
         "bash": false, "todowrite": false, "task": false, "skill": false,
-        "codesearch": false, "lsp": false, "question": false
+        "codesearch": false, "lsp": false, "question": false,
+        // Kilo built-ins outside this workflow (scheduling, boards, goals).
+        "agent_manager_models": false, "background_process": false, "board_post": false, "board_read": false, "cancel_wakeup": false, "cron_create": false, "cron_delete": false, "cron_list": false, "goal": false, "goal_report": false, "kilo_local_recall": false, "link_pr": false, "list_mcp_resource_templates": false, "list_mcp_resources": false, "read_mcp_resource": false, "schedule_wakeup": false
       }
     },
     "cfd-orchestrator": {
@@ -95,7 +97,8 @@
       // These built-ins neither agent needs.
       "tools": {
         "bash": false, "todowrite": false, "skill": false,
-        "codesearch": false, "lsp": false, "question": false
+        "codesearch": false, "lsp": false, "question": false,
+        "agent_manager_models": false, "background_process": false, "board_post": false, "board_read": false, "cancel_wakeup": false, "cron_create": false, "cron_delete": false, "cron_list": false, "goal": false, "goal_report": false, "kilo_local_recall": false, "link_pr": false, "list_mcp_resource_templates": false, "list_mcp_resources": false, "read_mcp_resource": false, "schedule_wakeup": false
       }
     },
     "cfd-worker": {
@@ -126,7 +129,26 @@
         "consultant_draft_annotation_from_report": false,
         "consultant_flag_uncited_claims": false,
         "task": false, "todowrite": false, "webfetch": false, "websearch": false,
-        "skill": false, "codesearch": false, "lsp": false, "question": false
+        "skill": false, "codesearch": false, "lsp": false, "question": false,
+        "agent_manager_models": false, "background_process": false, "board_post": false, "board_read": false, "cancel_wakeup": false, "cron_create": false, "cron_delete": false, "cron_list": false, "goal": false, "goal_report": false, "kilo_local_recall": false, "link_pr": false, "list_mcp_resource_templates": false, "list_mcp_resources": false, "read_mcp_resource": false, "schedule_wakeup": false
+      }
+    },
+    "cfd-local-plan": {
+      "mode": "primary",
+      "model": "ollama/cfd-local",
+      "temperature": 0.1,
+      "description": "Local model executes a step-by-step plan you paste (see workshop/prompts/).",
+      "prompt": "{file:./.kilo/prompts/cfd-local-plan.md}",
+      "steps": 60,
+      // Only what a plan uses: the smallest schema a local model can hold.
+      "tools": {
+        "*": false,
+        "consultant_get_tutorial_annotation": true,
+        "openfoam_prepare_case": true, "openfoam_copy_tutorial_dict": true,
+        "openfoam_write_dict": true, "openfoam_record_step": true,
+        "openfoam_run_blockmesh": true, "openfoam_check_mesh": true,
+        "openfoam_run_solver": true, "openfoam_finalize_report": true,
+        "validation_run_analysis": true, "write": true, "read": true
       }
     },
     "cfd-local": {
@@ -152,7 +174,8 @@
         "consultant_list_tutorial_annotations": false,
         "bash": false,
         "task": false, "todowrite": false, "webfetch": false, "websearch": false,
-        "skill": false, "codesearch": false, "lsp": false, "question": false
+        "skill": false, "codesearch": false, "lsp": false, "question": false,
+        "agent_manager_models": false, "background_process": false, "board_post": false, "board_read": false, "cancel_wakeup": false, "cron_create": false, "cron_delete": false, "cron_list": false, "goal": false, "goal_report": false, "kilo_local_recall": false, "link_pr": false, "list_mcp_resource_templates": false, "list_mcp_resources": false, "read_mcp_resource": false, "schedule_wakeup": false
       }
     }
   }

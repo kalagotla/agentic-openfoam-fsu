@@ -380,6 +380,13 @@ if $WANT_LOCAL; then
             curl -fsSL https://ollama.com/install.sh | quiet sh || die "Ollama install failed."
         fi
     fi
+    # Newer models (muse-glimmer, gemma4) need a recent Ollama. The official
+    # installer upgrades in place and keeps downloaded models.
+    ollama_ver=$(ollama --version 2>&1 | tail -1 | awk '{print $NF}')
+    if ! $HPC && [[ $(printf '%s\n0.30.0\n' "$ollama_ver" | sort -V | head -1) != 0.30.0 ]]; then
+        say "Upgrading Ollama $ollama_ver (newer models need >= 0.30)…"
+        curl -fsSL https://ollama.com/install.sh | quiet sh || warn "Ollama upgrade failed; older models still work."
+    fi
     ok "Ollama $(ollama --version 2>&1 | tail -1 | awk '{print $NF}')"
     # local-model.sh starts the server if needed, picks + pulls the model,
     # and creates the `cfd-local` alias the Kilo agents use.

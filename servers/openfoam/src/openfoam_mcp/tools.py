@@ -1497,6 +1497,15 @@ def write_dict(
     return {"success": True, "path": str(target)}
 
 
+def _whitespace_insensitive_matches(content: str, target: str) -> list[tuple[int, int]]:
+    """Spans of ``content`` equal to ``target`` up to whitespace-run width."""
+    parts = target.split()
+    if not parts:
+        return []
+    pattern = r"\s+".join(re.escape(p) for p in parts)
+    return [m.span() for m in re.finditer(pattern, content)]
+
+
 def copy_tutorial_dict(
     tutorial_path: str,
     case_path: str,
@@ -1577,6 +1586,16 @@ def copy_tutorial_dict(
     if replacements:
         for old, new in replacements.items():
             occurrences = content.count(old)
+            span = None
+            if occurrences == 0:
+                # Dictionaries align values with runs of spaces that models
+                # rarely reproduce exactly ("endTime 2000;" for
+                # "endTime         2000;"). Fall back to a match that treats
+                # any whitespace run as equal, still requiring one hit.
+                matches = _whitespace_insensitive_matches(content, old)
+                occurrences = len(matches)
+                if occurrences == 1:
+                    span = matches[0]
             if occurrences == 0:
                 return {
                     "success": False,
@@ -1592,7 +1611,10 @@ def copy_tutorial_dict(
                         f"in {tutorial_path} — give a longer, unique snippet: {old!r}"
                     ),
                 }
-            content = content.replace(old, new, 1)
+            if span is None:
+                content = content.replace(old, new, 1)
+            else:
+                content = content[: span[0]] + new + content[span[1] :]
             patches_applied += 1
 
     case = Path(case_path)

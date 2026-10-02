@@ -72,7 +72,12 @@ job_cpus() {
 # (~3.6B active), so it is usable even partly on CPU.
 choose_model() {
     local vram=$1 ram=$2
-    if (( vram >= 14 )) || (( vram == 0 && ram >= 24 )) || (( vram > 0 && vram + ram >= 32 )); then
+    # muse-glimmer:30b is the most reliable tool caller we tested (Oct 2026:
+    # 3/3 clean runs where gpt-oss:20b garbled arguments); it needs ~16 GB of
+    # VRAM at a 64k context and a recent Ollama.
+    if (( vram >= 20 )); then
+        echo muse-glimmer:30b
+    elif (( vram >= 14 )) || (( vram == 0 && ram >= 24 )) || (( vram > 0 && vram + ram >= 32 )); then
         echo gpt-oss:20b
     elif (( ram >= 12 || vram >= 8 )); then
         echo gemma4:12b
@@ -211,6 +216,7 @@ if $REMOTE; then
 else
     VRAM=$(gpu_vram_gb); RAM=$(ram_gb)
 fi
+AUTO_PICK=false; [[ -z ${1:-} ]] && AUTO_PICK=true
 MODEL=${1:-$(choose_model "$VRAM" "$RAM")}
 CTX=${CFD_LOCAL_CTX:-$(choose_ctx "$VRAM" "$RAM")}
 
@@ -234,9 +240,13 @@ elif [[ -n ${HTTPS_PROXY:-${https_proxy:-}} ]] && command -v sbatch >/dev/null; 
     "$REPO_DIR/scripts/ollama-fetch.sh" "${OLLAMA_MODELS:-$HOME/.ollama/models}" "$MODEL" \
         || die "Download of $MODEL failed."
     ollama show "$MODEL" >/dev/null 2>&1 || die "Ollama cannot read $MODEL after download."
-else
-    say "Pulling $MODEL (one-time download)…"
-    ollama pull "$MODEL"
+elif ! { say "Pulling $MODEL (one-time download)…"; ollama pull "$MODEL"; }; then
+    # Typically an Ollama too old for the model ("requires a newer version").
+    $AUTO_PICK && [[ $MODEL != gpt-oss:20b ]] || die "Could not pull $MODEL."
+    warn "Could not pull $MODEL with Ollama $(ollama --version 2>&1 | tail -1 | awk '{print $NF}'); falling back to gpt-oss:20b."
+    warn "Upgrade Ollama for the better model: curl -fsSL https://ollama.com/install.sh | sh"
+    MODEL=gpt-oss:20b
+    ollama show "$MODEL" >/dev/null 2>&1 || link_shared_model "$MODEL" || ollama pull "$MODEL" || die "Could not pull $MODEL."
 fi
 
 say "Creating alias $ALIAS -> $MODEL (num_ctx $CTX)…"

@@ -1741,3 +1741,49 @@ class TestClassifySolverFailure:
 
     def test_missing_log_defaults_to_diverged(self, tmp_path: Path) -> None:
         assert _tools._classify_solver_failure(tmp_path / "nope.log") == "diverged"
+
+
+class TestCopyTutorialDictWhitespace:
+    """Replacement keys match across whitespace-run differences (models
+    rarely reproduce the aligned spacing of OpenFOAM dictionaries)."""
+
+    def _setup(self, fake_tutorials: Path, tmp_path: Path) -> Path:
+        (fake_tutorials / "incompressible/simpleFoam/myCase/system/controlDict").write_text(
+            "application     simpleFoam;\nendTime         2000;\nwriteInterval   100;\n"
+        )
+        case = tmp_path / "case"
+        case.mkdir()
+        return case
+
+    def test_collapsed_whitespace_still_matches(self, fake_tutorials: Path, tmp_path: Path) -> None:
+        from openfoam_mcp.tools import copy_tutorial_dict
+
+        case = self._setup(fake_tutorials, tmp_path)
+        r = copy_tutorial_dict(
+            tutorial_path="incompressible/simpleFoam/myCase/system/controlDict",
+            case_path=str(case), dict_name="controlDict",
+            replacements={"endTime 2000;": "endTime         5000;"},
+        )
+        assert r["success"] is True
+        text = (case / "system/controlDict").read_text()
+        assert "endTime         5000;" in text and "2000" not in text
+        assert "writeInterval   100;" in text
+
+    def test_exact_match_still_preferred_and_missing_still_fails(
+        self, fake_tutorials: Path, tmp_path: Path
+    ) -> None:
+        from openfoam_mcp.tools import copy_tutorial_dict
+
+        case = self._setup(fake_tutorials, tmp_path)
+        ok = copy_tutorial_dict(
+            tutorial_path="incompressible/simpleFoam/myCase/system/controlDict",
+            case_path=str(case), dict_name="controlDict",
+            replacements={"writeInterval   100;": "writeInterval   1000;"},
+        )
+        assert ok["success"] is True
+        bad = copy_tutorial_dict(
+            tutorial_path="incompressible/simpleFoam/myCase/system/controlDict",
+            case_path=str(case), dict_name="controlDict",
+            replacements={"endTime 3000;": "x"},
+        )
+        assert bad["success"] is False and bad["reason"] == "patch_not_found"
