@@ -1,9 +1,11 @@
-# Workshop walkthrough: persistent knowledge, three ways
+# Workshop walkthrough: persistent knowledge, down the ladder
 
 This is the hands-on part of the session. You will run one CFD benchmark
-twice and watch the second run inherit what the first run learned, and you
-will drive it three ways: with a frontier model, with a frontier model
-directing a local model, and with a local model alone.
+twice and watch the second run inherit what the first run learned. Then you
+will drive the second run down a ladder of setups: a frontier model alone, a
+frontier model planning for a local model, a large open model, and a local
+model alone, with an open-ended prompt and then a targeted one. The ladder
+shows how much the model matters, and how much the prompt does.
 
 ## 0. Setup (do this before the session)
 
@@ -77,16 +79,17 @@ No account at all? Kilo's free models and the local model need none.
 
 | Your machine | Model | Download |
 |---|---|---|
+| GPU with ≥ 20 GB | `muse-glimmer:30b` (Meta) | 18 GB |
 | GPU with ≥ 14 GB, or ≥ 24 GB RAM without one | `gpt-oss:20b` (OpenAI) | 14 GB |
 | smaller GPU, or 12–24 GB RAM | `gemma4:12b` (Google) | 8 GB |
 | less than that | `nemotron-3-nano:4b` (NVIDIA) | 2.8 GB |
 
-The workshop sticks to US-developed open models. Others worth trying on a
-GPU with 24 GB or more: `muse-glimmer:30b` (Meta, 18 GB) and
-`nemotron-3.5-lightning:30b` (NVIDIA, 25 GB). Switch with, e.g.,
-`./scripts/local-model.sh muse-glimmer:30b`. The agents always address the
-model as `cfd-local`, so nothing else changes. Only `gpt-oss:20b` was
-rehearsed end to end; treat the others as experiments.
+All are US-developed open models. In our tests `muse-glimmer:30b` was by far
+the most reliable at tool calls (it needs a recent Ollama; `setup.sh`
+upgrades an old one). `gpt-oss:20b` works but garbles a fraction of its
+tool arguments; the smaller two cannot carry a run. Switch with
+`./scripts/local-model.sh <model>`; the agents always address the model as
+`cfd-local`.
 
 ## 1. The idea: knowledge that persists between runs
 
@@ -116,9 +119,9 @@ agent applies it, cites it, and skips the rediscovery.
 
 The corpus is plain files in the repo, so it doesn't matter which model
 earned it. An entry earned by a frontier model is reused by a local one.
-That is the thread through the three loops below.
+That is the thread through the ladder below.
 
-## 2. Run it
+## 2. Run it: the ladder
 
 Keep a second terminal open on the audit trail while an agent works:
 
@@ -136,95 +139,58 @@ Between steps:
 ./scripts/workshop.sh reset-all   # also forget the entry (back to Step 1)
 ```
 
-### Loop A — frontier only (Claude Code)
+**Step 1 is always run with a strong frontier agent** (Claude Code, or a
+strong model in Copilot/Codex): it writes the corpus entry everything after
+it reuses, and a weak entry carries straight into a failed Step 2. Then run
+Step 2 down the ladder, from the most capable setup to the least, and watch
+two things change: who does the work, and how much the prompt has to say.
 
-```bash
-claude
-```
-```
-> Set up and run cases/scenarios/lid-cavity.yaml
-```
+| Rung | Who plans · who executes | How to run Step 2 | Measured (Oct 1) |
+|---|---|---|---|
+| 1 | Frontier alone | `claude` → `Set up and run cases/scenarios/lid-cavity-re1000.yaml` | PASS, cited the entry 8×, 0 retries, 2.5 min, $1.23 |
+| 2 | Frontier plans · local executes | `claude` → paste [`prompts/claude-drives-local.md`](prompts/claude-drives-local.md) | PASS, 0 failed local calls, 5.7 min, $1.15 |
+| 3 | Large open model alone (free Nemotron 3 Ultra) | `kilo` (agent `cfd`) → the Step 2 prompt | PASS, but 15–23 min: many solver re-runs, dictionaries written from memory |
+| 4 | Large open model · local executes | `kilo` (agent `cfd-orchestrator`) → the Step 2 prompt | PASS, 7 delegated tasks, 17 min (with gpt-oss as the worker it never reached a verdict) |
+| 5a | Local alone, open-ended | `kilo` (agent `cfd-local`) → the Step 2 prompt | finishes, but misses the entry's lessons: REVIEW, 7–9 min |
+| 5b | Local alone, targeted prompt | `kilo` (agent `cfd-local`) → paste [`prompts/local-step2-targeted.md`](prompts/local-step2-targeted.md) | PASS 3/3, ~75 s, 0 nudges |
 
-At the validation pause, read the verdict in REPORT.md and reply (e.g.
-"approved — refine the mesh"). When the run finishes:
+What it shows:
 
-```bash
-./scripts/workshop.sh promote
-```
+- **Capability falls down the ladder, and the prompt can buy it back.** The
+  same local model goes from REVIEW (open-ended) to a clean PASS in about a
+  minute when the prompt is an exact plan (5a → 5b).
+- **Frontier models self-heal; local models follow.** A frontier model reads
+  the corpus, checks tutorial files, notices its own mistakes and plans. A
+  local model does none of that reliably, but executes a precise plan well.
+  Rung 2 is the practical combination: the frontier model writes the plan
+  (`docs/local-plan-format.md`), the local model does the work, and the
+  frontier model judges the result, at about the same cost as doing it alone
+  ($1.15 vs $1.23), with the hands-on work and tool output on your machine.
+- **The model matters more than the harness.** Nemotron behaved the same in
+  Kilo, in the repo's own harness and in Hermes: it often skipped the
+  tutorial's mesh for a fine grid and took 12–20 minutes per run through the
+  free gateway (~14 s per model call).
+- **The corpus is only as good as the run that earned it.** When Step 1 was
+  run by Nemotron, its thin entry ("20×20 is enough") sent Step 2 to a FAIL.
+  That is why a person reviews before promoting.
 
-then, in Claude Code, `/clear` and:
+Recorded runs of every rung are in [`recorded/`](recorded/) as a fallback.
 
-```
-> Set up and run cases/scenarios/lid-cavity-re1000.yaml
-```
+### Running the rungs
 
-Run Step 1 with a strong frontier model (Claude, or GPT/Claude through
-Copilot or Codex): it writes the corpus entry everything after it reuses.
-In our tests the free Nemotron model started correctly from the tutorial
-mesh but skipped the step-by-step `REPORT.md` narration, which is what the
-entry is drafted from. It does well as Step 2's orchestrator (Loop B).
-
-The same loop works in any of the agents. In **Copilot** (`copilot`) or
-**Codex** (`codex`), type the same two prompts, starting a fresh session
-(`/clear`, or restart the CLI) between the steps. In Kilo, run `kilo`,
-keep the default `cfd` agent, pick a frontier model with `/models`, and
-type the same prompts. Only Claude Code enforces the scenario's review
-pauses with a hook; the other agents are asked to honor them in
-`CLAUDE.md` and usually do.
-
-### Loop B — frontier + local (Kilo orchestrator)
-
-```bash
-kilo
-```
-
-Press **Tab** until the agent reads `cfd-orchestrator`, then choose a
-frontier model with `/models` (the free `kilo/nvidia/nemotron-3-ultra-550b-a55b:free`
-works; free gateways sometimes time out mid-run, so if Kilo stops with
-"Upstream idle timeout", type `continue`). Prompt:
-
-```
-Set up and run cases/scenarios/lid-cavity-re1000.yaml
-```
-
-The frontier model reads the scenario, looks up the corpus, makes and
-narrates every decision, and judges the results. It has no tools that
-change the case. Each hands-on step (copying dicts, meshing, solving,
-running the analysis) goes to the `cfd-worker` subagent, which runs on
-your local model. Kilo shows each delegated task and its report inline.
-The long tool outputs stay on your machine, and the frontier model only
-sees the summaries.
-
-The split holds best with a strong frontier model (Claude, GPT, Gemini
-Pro). Weaker free models sometimes lose patience and do a step
-themselves. You'll see a `openfoam_*` call in the orchestrator's own
-column instead of a delegated task. That's worth pointing out, not a
-failure.
-
-### Loop C — local only (Kilo)
-
-```bash
-kilo
-```
-
-Press **Tab** until the agent reads `cfd-local` (pinned to your Ollama
-model). Prompt:
-
-```
-Set up and run cases/scenarios/lid-cavity-re1000.yaml
-```
-
-Run this **after** Step 1 has been promoted, so the local model inherits
-the entry. That is the point: a frontier model discovered the setup once,
-and a model small enough to run offline looks it up and applies it.
-
-Be clear with the room about what to expect. In our rehearsals
-`gpt-oss:20b` found and used the corpus entry every time. But it does not
-finish the whole case unattended. It ends its turn early or hand-writes a
-dict with a syntax error, and `qwen3:30b` and `gpt-oss:120b` behaved the
-same. Drive it: when it stops, reply `continue`, or tell it the next step
-("now run blockMesh"). The contrast with Loop B, where the same local
-model finishes reliably given one small task at a time, is the lesson.
+- **Rung 1** works in any agent: Claude Code, Copilot (`/login`), Codex.
+  At the validation pause, read the verdict in REPORT.md and reply.
+- **Rung 2** needs the local model running (`./scripts/local-model.sh
+  --show`) and Kilo installed: the frontier agent writes
+  `cases/work/plan-lid-cavity-re1000.md` and runs
+  `scripts/local-worker.sh` on it. On the cluster, run
+  `scripts/hpc-gpu.sh use` first so the local model is on the GPU.
+- **Rungs 3–5** run in Kilo: `kilo`, then **Tab** to the agent. `cfd` and
+  `cfd-orchestrator` use the free Nemotron by default (`/models` to
+  change); `cfd-local` uses your local model. Free gateways sometimes time
+  out; type `continue`.
+- **Rung 5b** can also use the lean `cfd-local-plan` agent, which only
+  executes plans.
 
 ### A suggested session (FSU DC-QC, Oct 2, 2:00–4:00 PM)
 
@@ -233,29 +199,14 @@ The hands-on block is 2:35–3:45 (70 min):
 | Time | Who drives | What |
 |---|---|---|
 | 10 min | everyone | `./scripts/doctor.sh` green, agent signed in |
-| 20 min | Loop A, a frontier agent | Step 1 — discover at Re = 400 |
-| 5 min | you | `./scripts/workshop.sh promote` — review the draft entry |
-| 20 min | Loop B, frontier + local | Step 2 — frontier plans, local model runs mesh/solve; compare REPORT.md |
-| 15 min | Loop C, local only | Step 2 again — local model finds the entry; you nudge it along |
-| after | `reset-all` | start over, or try Step 1 local-only to see what the corpus saved you |
+| 15 min | rung 1 | Step 1 with Claude Code; promote the entry |
+| 10 min | rung 1 | Step 2 with the same agent: watch it cite the entry |
+| 10 min | rung 2 | Step 2 again, Claude planning for the local model |
+| 15 min | rungs 3–4 | Step 2 with the free open model, alone and orchestrating (or show `recorded/`) |
+| 10 min | rung 5 | Step 2 local-only: open-ended, then the targeted prompt |
 
 The speaker's GPU job is booked from 11:00 AM to 5:00 PM (`scripts/hpc-gpu.sh status`);
-if it has not started, show [`recorded/`](recorded/) for Loops B and C.
-
-### What the rehearsals looked like (Sept 2026)
-
-| Run | Model(s) | Result | Time | Cost |
-|---|---|---|---|---|
-| Step 1, Loop A | Claude Code (Opus) | coarse miss → grid study to 80×80, both profiles in tolerance; 13 decisions, 4 retries; draft entry written | 6 min | $2.45 |
-| Step 2, Loop A | Claude Code (Opus), entry promoted | cited the entry 14×, **0 retries**, PASS on 160×160 (u L2 0.003, v L2 0.006) | 4.5 min | $1.80 |
-| Step 1, Loop B | free Kilo model + local gpt-oss:20b | PASS (u L2 0.0045, v L2 0.035); local worker ran mesh/solve | 17 min | free |
-| Step 2, Loop C | gpt-oss:20b alone | found and applied the entry; stopped before solving without nudges | — | free |
-
-Recorded again on Oct 1 with the GPU loops, unedited, in
-[`recorded/`](recorded/): Step 1 (Claude Code) PASS in 4.75 min; Step 2
-Loop B (free Nemotron + local gpt-oss on GPU) PASS, 0 retries, corpus
-cited 10×; Step 2 Loop C no verdict after 8 nudges. **Show these if the
-live GPU is not available.**
+if it has not started, show [`recorded/`](recorded/) for the local rungs.
 
 ## 3. When things go wrong
 

@@ -137,9 +137,12 @@ same model store in your home directory, so it downloads nothing. If the
 CPU job ends, the tunnel goes with it; run `use` again from the new node.
 The default job comes from `AOF_GPU_SBATCH` in `workshop/hpc-site.env`.
 
-Checked Oct 2026: `gpu_q` job on an RTX 4500 Ada (24 GB), Kilo `cfd-local`
-on an `ame_q` CPU node calling OpenFOAM tools through the tunnel, model
-100% on the GPU.
+Checked Oct 1, 2026, as a fresh account: `setup.sh` (106 s, doctor all
+green, all four agents see the servers), a Kilo frontier run through the
+proxy, then a `gpu_q` job on an RTX 4500 Ada (24 GB) where `use` picked
+`muse-glimmer:30b` from the shared store and the targeted Step 2 plan
+(`scripts/local-worker.sh`, see [`README.md`](README.md) rung 5b/2) passed
+on the GPU in under 4 minutes with no failed tool calls.
 
 If the GPU job has not started by the time you need it, show the recorded
 GPU runs in [`recorded/`](recorded/) instead.
