@@ -237,7 +237,7 @@ if ! grep -qF "$MARK_BEGIN" "$HOME/.bashrc" 2>/dev/null; then
         # mpirun hangs under WSLg + mirrored networking without this (see scripts/with-openfoam.sh).
         $HPC || echo 'export HWLOC_COMPONENTS=-gl'
         # Your own Ollama port on shared cluster nodes (see scripts/local-model.sh).
-        $HPC && echo 'export OLLAMA_HOST=127.0.0.1:$((20000 + $(id -u) % 20000))'
+        $HPC && echo "export OLLAMA_HOST=127.0.0.1:$("$REPO_DIR/scripts/local-model.sh" --port)"
         echo "# <<< agentic-openfoam <<<"
     } >>"$HOME/.bashrc"
     ok "added ~/.local/bin to PATH$($HPC || echo " and the 'of${OF_VERSION}' alias") in ~/.bashrc"

@@ -19,9 +19,16 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ALIAS=cfd-local
 # On a shared cluster node other users run their own Ollama, so each user
 # gets a port of their own instead of the default 11434 (which would quietly
-# connect you to someone else's server, and their model store).
+# connect you to someone else's server, and their model store). The port
+# also depends on the model store, so a second install with its own store
+# never talks to a server left running for the first.
+cluster_port() {
+    local key="$(id -u):${OLLAMA_MODELS:-$HOME/.ollama/models}"
+    echo $((20000 + $(printf '%s' "$key" | cksum | cut -d' ' -f1) % 20000))
+}
+if [[ ${1:-} == --port ]]; then cluster_port; exit 0; fi
 if [[ -z ${OLLAMA_HOST:-} ]] && command -v sbatch >/dev/null 2>&1; then
-    OLLAMA_HOST=127.0.0.1:$((20000 + $(id -u) % 20000))
+    OLLAMA_HOST=127.0.0.1:$(cluster_port)
 fi
 OLLAMA_URL=${OLLAMA_HOST:-http://localhost:11434}
 [[ $OLLAMA_URL == http* ]] || OLLAMA_URL="http://$OLLAMA_URL"
