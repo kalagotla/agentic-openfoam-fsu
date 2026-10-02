@@ -214,6 +214,10 @@ def test_banner_and_index_round_trip(case: Path) -> None:
         when_it_breaks="A coarser grid misses the corner vortices",
         citations=["ghia_1982"],
     )
+    # finalize_report checks a narrated PASS against the saved analysis.
+    saved = case / "postProcessing/analysis/run_analysis_result.json"
+    saved.parent.mkdir(parents=True, exist_ok=True)
+    saved.write_text('{"metrics": {"u": {"within_tolerance": true}, "v": {"within_tolerance": true}}}')
     of_tools.finalize_report(str(case))
 
     report = parse_report(case)

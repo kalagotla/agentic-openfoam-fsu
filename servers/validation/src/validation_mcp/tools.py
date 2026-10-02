@@ -879,6 +879,15 @@ def run_analysis(
         }
 
     plots, missing = _verify_plots(case, payload.get("plots", []))
+    # Saved for openfoam.finalize_report, which checks a narrated PASS
+    # against these numbers.
+    try:
+        out = case / "postProcessing" / "analysis" / "run_analysis_result.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps({"script": script, "metrics": payload.get("metrics", {})},
+                                  indent=2, default=str))
+    except (OSError, TypeError, ValueError):
+        pass
     return {
         "success": True,
         "script": script,

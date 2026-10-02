@@ -960,7 +960,14 @@ class TestFinalizeReport:
         assert "Cavity at Re=400 matches Ghia 1982 setup." not in index
         assert "20x20 (under-resolved); 80x80 (slower)." not in index
 
-    def test_verdict_pass_from_validation(self, tmp_path: Path) -> None:
+    @staticmethod
+    def _save_metrics(case: Path, metrics: dict) -> None:
+        import json as _json
+        out = case / "postProcessing/analysis/run_analysis_result.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(_json.dumps({"metrics": metrics}))
+
+    def _pass_case(self, tmp_path: Path) -> Path:
         case = tmp_path / "case"
         case.mkdir()
         self._record_decision(
@@ -968,10 +975,35 @@ class TestFinalizeReport:
             title="80x80 matches Ghia: u 0.4%, v 0.5%",
             decision="Accept the case.",
         )
+        return case
+
+    def test_verdict_pass_from_validation(self, tmp_path: Path) -> None:
+        case = self._pass_case(tmp_path)
+        self._save_metrics(case, {"u": {"l2_error": 0.004, "within_tolerance": True},
+                                  "v": {"l2_error": 0.005, "within_tolerance": True}})
         finalize_report(str(case))
         text = (case / "REPORT.md").read_text()
         assert "**VERDICT: PASS**" in text
         assert "80x80 matches Ghia: u 0.4%, v 0.5%" in text
+
+    def test_pass_contradicted_by_metrics_becomes_review(self, tmp_path: Path) -> None:
+        case = self._pass_case(tmp_path)
+        self._save_metrics(case, {"u_centerline_L2_error": float("nan"), "u_centerline_pass": False})
+        finalize_report(str(case))
+        text = (case / "REPORT.md").read_text()
+        assert "**VERDICT: REVIEW**" in text and "not backed by the validation metrics" in text
+
+    def test_pass_without_saved_analysis_becomes_review(self, tmp_path: Path) -> None:
+        case = self._pass_case(tmp_path)
+        finalize_report(str(case))
+        assert "**VERDICT: REVIEW**" in (case / "REPORT.md").read_text()
+
+    def test_pass_with_unflagged_metrics_is_marked_unchecked(self, tmp_path: Path) -> None:
+        case = self._pass_case(tmp_path)
+        self._save_metrics(case, {"Cd": 0.012})
+        finalize_report(str(case))
+        text = (case / "REPORT.md").read_text()
+        assert "**VERDICT: PASS**" in text and "not machine-checked" in text
 
     def test_verdict_fail_from_validation_error(self, tmp_path: Path) -> None:
         case = tmp_path / "case"

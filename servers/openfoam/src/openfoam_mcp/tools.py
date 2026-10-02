@@ -941,11 +941,66 @@ def _render_decisions_index(entries: list[dict[str, str]]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _render_summary_block(body: str, entries: list[dict[str, str]]) -> str:
+ANALYSIS_RESULT_FILE = "postProcessing/analysis/run_analysis_result.json"
+
+
+def _metrics_support(case: Path | None) -> tuple[str, str]:
+    """Do the last ``validation.run_analysis`` metrics back a PASS?
+
+    Returns ``(state, detail)``: ``verified`` (every pass flag true),
+    ``contradicted`` (a flag false, or a NaN/inf metric), ``unchecked`` (no
+    pass flags to read) or ``missing`` (no saved result). Pass flags are
+    ``within_tolerance`` (what ``compare_profiles`` / ``compare_scalar``
+    return) and any key named ``pass``/``passed`` or ending in ``_pass``.
+    """
+    if case is None:
+        return "unchecked", ""
+    path = case / ANALYSIS_RESULT_FILE
+    if not path.is_file():
+        return "missing", "no validation.run_analysis result saved in this case"
+    try:
+        metrics = json.loads(path.read_text(errors="replace")).get("metrics", {})
+    except (OSError, ValueError):
+        return "missing", "the saved run_analysis result is unreadable"
+    flags: list[tuple[str, bool]] = []
+    bad_numbers: list[str] = []
+
+    def walk(obj: Any, key: str = "") -> None:
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                walk(v, f"{key}.{k}" if key else str(k))
+        elif isinstance(obj, list):
+            for i, v in enumerate(obj):
+                walk(v, f"{key}[{i}]")
+        elif isinstance(obj, bool):
+            leaf = key.rsplit(".", 1)[-1].lower()
+            if leaf == "within_tolerance" or leaf in ("pass", "passed") or leaf.endswith("_pass"):
+                flags.append((key, obj))
+        elif obj is None and re.search(r"(l2|linf|error)", key.lower()):
+            bad_numbers.append(key)
+        elif isinstance(obj, float) and not math.isfinite(obj):
+            bad_numbers.append(key)
+
+    walk(metrics)
+    failed = [k for k, v in flags if not v]
+    if bad_numbers or failed:
+        why = ", ".join((failed + [f"{k} is not a number" for k in bad_numbers])[:4])
+        return "contradicted", why
+    if not flags:
+        return "unchecked", "the analysis metrics carry no pass/within_tolerance field"
+    return "verified", ""
+
+
+def _render_summary_block(
+    body: str, entries: list[dict[str, str]], case: Path | None = None
+) -> str:
     """Render the top-of-report verdict banner from the narration body.
 
     Verdict is read off the last ``validation`` entry's status; counts are
-    derived by scanning entry headers, retry lines, and parsed decisions.
+    derived by scanning entry headers, retry lines, and parsed decisions. A
+    PASS is checked against the metrics ``validation.run_analysis`` saved in
+    the case: a PASS those numbers do not support is shown as REVIEW, so a
+    narrated claim never outranks the tested comparison.
     """
     headers: list[dict[str, str]] = []
     n_retries = 0
@@ -961,6 +1016,14 @@ def _render_summary_block(body: str, entries: list[dict[str, str]]) -> str:
         last = validation[-1]
         verdict = _VERDICT_FROM_STATUS.get(last["status"].strip(), "REVIEW")
         outcome = last["title"].strip()
+        if verdict == "PASS":
+            state, detail = _metrics_support(case)
+            if state in ("contradicted", "missing"):
+                verdict = "REVIEW"
+                outcome = (f"narrated as passing, but not backed by the validation metrics "
+                           f"({detail}). Narration: {outcome}")
+            elif state == "unchecked" and case is not None:
+                outcome = f"{outcome} (not machine-checked: {detail})"
     else:
         verdict = "INCOMPLETE"
         outcome = "no validation step recorded"
@@ -1323,7 +1386,7 @@ def finalize_report(case_path: str) -> ToolResult:
         text = _strip_summary_block(report.read_text(errors="replace"))
         body = _strip_decisions_table(text)
         entries = _parse_decision_entries(body)
-        summary = _render_summary_block(body, entries)
+        summary = _render_summary_block(body, entries, case=report.parent)
         index = _render_decisions_index(entries)
         with_summary = _insert_summary_after_header(body, summary)
         report.write_text(with_summary.rstrip() + "\n\n" + index)
