@@ -30,6 +30,14 @@ if [[ -f $OF_BASHRC ]]; then
     exec "$@"
 fi
 
+# AOF_OPENFOAM_SIF normally comes from ~/.bashrc (setup.sh writes it). A
+# shell that skipped .bashrc (non-login terminals, tools started by other
+# tools) falls back to the site default, then to a copy in .hpc/.
+if [[ -z ${AOF_OPENFOAM_SIF:-} && -f $REPO_DIR/workshop/hpc-site.env ]]; then
+    # shellcheck disable=SC1091
+    source "$REPO_DIR/workshop/hpc-site.env"
+    [[ -f ${AOF_OPENFOAM_SIF:-} ]] || unset AOF_OPENFOAM_SIF
+fi
 SIF=${AOF_OPENFOAM_SIF:-$REPO_DIR/.hpc/openfoam-v2412.sif}
 if [[ -f $SIF ]] && command -v apptainer >/dev/null 2>&1; then
     binds=()
