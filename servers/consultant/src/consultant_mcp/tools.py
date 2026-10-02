@@ -925,6 +925,34 @@ def _yaml_list(values: list[str] | None, placeholder: str) -> str:
     return "".join(f"  - {json.dumps(v)}\n" for v in items)
 
 
+def _validated_setup_section(
+    validated_setup: list[str] | None, entries: list[dict[str, str]]
+) -> str:
+    """The recipe a later run should start from, above the chronological table.
+
+    The decision table is chronological, so a first attempt (e.g. a coarse
+    grid that later failed) appears before the fix that passed; a reader in
+    a hurry, or a small model, takes the first row. This section states the
+    final, validated choices up front: as supplied by the agent that ran the
+    case, else the last recorded decision for each phase.
+    """
+    items = [v for v in (validated_setup or []) if v and v.strip()]
+    source = "as recorded by the run"
+    if not items:
+        last: dict[str, str] = {}
+        for e in entries:
+            if e.get("decision", "").strip():
+                last[e["phase"]] = e["decision"].strip()
+        items = [f"{phase}: {dec}" for phase, dec in last.items()]
+        source = "last recorded decision per phase (auto-derived; confirm on review)"
+    if not items:
+        return ""
+    lines = "".join(f"- {_escape_cell(i)}\n" for i in items)
+    return (f"## Validated setup (start here)\n\n"
+            f"The final choices that passed validation, {source}. Later rows of the "
+            f"table below explain how each was reached.\n\n{lines}\n")
+
+
 def _render_draft_annotation(
     tutorial_path: str,
     case_path: str,
@@ -936,6 +964,8 @@ def _render_draft_annotation(
     suitable_for: list[str] | None = None,
     not_suitable_for: list[str] | None = None,
     references: list[str] | None = None,
+    validated_setup: list[str] | None = None,
+    entries: list[dict[str, str]] | None = None,
 ) -> str:
     """Render the .draft.md content for promotion review.
 
@@ -970,6 +1000,9 @@ def _render_draft_annotation(
         f"<One-paragraph framing — what this tutorial is and what role "
         f"it plays as a template. Replace this line.>\n"
         f"\n"
+        f"{_validated_setup_section(validated_setup, entries or [])}"
+        f"## Decisions, in the order they were made\n"
+        f"\n"
         f"{table_markdown}\n"
         f"\n"
         f"## Notes\n"
@@ -990,6 +1023,7 @@ def draft_annotation_from_report(
     suitable_for: list[str] | None = None,
     not_suitable_for: list[str] | None = None,
     references: list[str] | None = None,
+    validated_setup: list[str] | None = None,
 ) -> ToolResult:
     """Draft a candidate tutorial annotation from a case's REPORT.md.
 
@@ -1050,6 +1084,12 @@ def draft_annotation_from_report(
         not_suitable_for: List of conditions under which it is the wrong
             choice (your proposal, for review).
         references: Curated list of paper/doc citations for the frontmatter.
+        validated_setup: The final, validated setup as a short recipe a
+            later run should start from, one item per choice (which
+            tutorial each dictionary came from, mesh, key controls, the fix
+            for each failure). Rendered as "Validated setup (start here)"
+            above the chronological decision table; if omitted, the last
+            recorded decision per phase is used.
 
     Returns:
         On success: ``{"success": True, "draft_path": str,
@@ -1161,6 +1201,8 @@ def draft_annotation_from_report(
         suitable_for=suitable_for,
         not_suitable_for=not_suitable_for,
         references=references,
+        validated_setup=validated_setup,
+        entries=entries,
     )
 
     try:

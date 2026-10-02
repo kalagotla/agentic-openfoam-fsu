@@ -351,7 +351,11 @@ the regime class, not this run's exact parameter values), `references` (the pape
 citations you used), and your *proposed* `suitable_for` /
 `not_suitable_for` (generalise them from your `when_it_breaks` reasoning;
 the tool marks them "agent-proposed, confirm" so the reviewer knows to
-check). The decision table fills itself from your `record_step` entries.
+check), and `validated_setup`: the final recipe that passed, one item per
+choice (which tutorial each dictionary came from and what was patched, the
+final mesh, every control you changed and the failure that motivated it),
+written so a later run that reads only this list reproduces the validated
+setup. The decision table fills itself from your `record_step` entries.
 What you leave for the human is only judgment: confirming those two
 proposals and the scenario→tutorial-template generalisation. Do not
 fabricate metadata you don't have — omit a field and it stays a visible
